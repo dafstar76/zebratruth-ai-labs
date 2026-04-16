@@ -1,0 +1,16 @@
+{
+  "name": "zebratruth-ai-labs",
+  "description": "ZebraTruth AI compliance agents — embed compliance intelligence into your creative workflows",
+  "plugins": [
+    {
+      "name": "zebratruth-compliance",
+      "description": "Check advertising content against jurisdiction laws, platform policies, and rights clearance requirements",
+      "source": "./skills/zebratruth-compliance"
+    }
+  ],
+  "owner": {
+    "name": "ZebraTruth",
+    "email": "support@zebratruth.com",
+    "url": "https://zebratruth.com"
+  }
+}
