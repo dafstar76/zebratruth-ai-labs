@@ -1,0 +1,41 @@
+---
+title: Credits & Billing
+description: Credit system, plans, and cost optimization
+---
+
+# Credits & Billing
+
+ZebraTruth uses a **credits-based billing** system. Users see credits, never dollars.
+
+## Plans
+
+| Plan | Price | Credits | Rate Limit | Load Units |
+|------|-------|---------|-----------|-----------|
+| Free | $0 | 1,332 lifetime | 10/min | 2 |
+| Starter | $49.99/mo | 1,665/mo | 60/min | 8 |
+| Pro | $199.99/mo | 6,660/mo | 300/min | 25 |
+| Enterprise | Custom | Custom | Custom | Custom |
+
+## Cost Per Operation
+
+| Operation | Credits | Notes |
+|-----------|---------|-------|
+| Fast mode text check | ~12 | All agents parallel |
+| Full mode text check | ~47 | 4-phase pipeline |
+| Single agent call | ~8-12 | 1 agent x 3 stages |
+| Image rights check | ~5/image | CV pipeline |
+| Cached check | 0 | Same content returns cached result |
+
+## Checking Your Balance
+
+```bash
+GET /v1/usage
+```
+
+Returns `creditsRemaining`, `creditsTotal`, `creditsUsedThisMonth`, and period dates.
+
+## Cost Breakdown
+
+Every response includes `costBreakdown` showing per-agent, per-stage credit usage with cache hit indicators.
+
+See [Cost & Credits guide](/docs/guides/cost-and-credits) for optimization strategies.

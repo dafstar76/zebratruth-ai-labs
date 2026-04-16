@@ -1,0 +1,45 @@
+---
+title: Compliance Pipeline
+description: Fast vs Full mode execution
+---
+
+# Compliance Pipeline
+
+## Fast Mode
+
+All agents run **in parallel** with raw content. No enrichment between phases.
+
+- Cost: ~12 credits
+- Latency: 5-10 seconds
+- Best for: quick checks, real-time UI feedback, development
+
+## Full Mode
+
+**4-phase sequential pipeline** with content enrichment between phases:
+
+1. **Phase 1** — Jurisdiction agent detects applicable laws and creates a compliance profile
+2. **Phase 2** (parallel) — Advertising Law + Platform agents see Phase 1 findings
+3. **Phase 3** (parallel) — Metadata + Rights agents see Phase 1 + Phase 2 findings
+4. **Phase 4** — Score agent aggregates all checks
+
+- Cost: ~47 credits
+- Latency: 20-60 seconds
+- Best for: final pre-publish checks, thorough analysis
+
+## Choosing a Mode
+
+| Scenario | Recommended Mode |
+|----------|-----------------|
+| Real-time editor checks | Fast |
+| Pre-publish final review | Full |
+| Batch processing | Full (async) |
+| Development/testing | Fast |
+| Cost-sensitive | Fast |
+
+## Response Modes
+
+Both fast and full mode support three response modes:
+
+- **Sync** — block until complete, return full report
+- **Stream** — SSE events per agent (ideal for full mode)
+- **Async** — return immediately, deliver via webhook

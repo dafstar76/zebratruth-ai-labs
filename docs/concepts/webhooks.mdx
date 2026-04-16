@@ -1,0 +1,64 @@
+---
+title: Webhooks
+description: Async delivery, HMAC security, retry policy
+---
+
+# Webhooks
+
+Webhooks deliver compliance results asynchronously when using `responseMode: "async"`.
+
+## Delivery Guarantees
+
+- **At-least-once delivery** with `eventId` for client-side deduplication
+- **HMAC signature**: `X-ZebraTruth-Signature: sha256=<hmac(secret, body)>`
+- **Replay protection**: `X-ZebraTruth-Timestamp` — reject if drift > 5 minutes
+- **Retry policy**: 3 attempts with exponential backoff (1s, 5s, 25s)
+- **Dead letter**: After 3 failures, moved to dead letter queue
+
+## Webhook Payload
+
+```json
+{
+  "eventId": "evt_abc123",
+  "event": "check.completed",
+  "jobId": "job_xyz789",
+  "callbackId": "my-project-456",
+  "timestamp": "2026-04-16T12:00:00Z",
+  "version": 1,
+  "data": {
+    "score": 85,
+    "decision": "PUBLISH",
+    "checks": [...],
+    "annotations": [...],
+    "versionInfo": {...},
+    "costBreakdown": {...}
+  }
+}
+```
+
+## Verifying Signatures
+
+```javascript
+const crypto = require('crypto');
+
+function verifyWebhook(body, signature, timestamp, secret) {
+  // Check timestamp freshness
+  if (Math.abs(Date.now() - new Date(timestamp).getTime()) > 5 * 60 * 1000) {
+    return false;
+  }
+
+  // Verify HMAC
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(body)
+    .digest('hex');
+
+  return `sha256=${expected}` === signature;
+}
+```
+
+## Dead Letter Queue
+
+Failed deliveries are queryable via `GET /v1/webhooks/deliveries?status=dead`.
+
+See [Async Webhook guide](/docs/guides/async-webhook-execution) for the full submit-then-poll flow.

@@ -1,0 +1,101 @@
+---
+title: Authentication
+description: API keys, validation, and security
+---
+
+# Authentication
+
+All API requests require a bearer token in the `Authorization` header.
+
+```bash
+Authorization: Bearer zt_live_your_key_here
+```
+
+## API Key Types
+
+| Prefix | Environment | Cost | LLM Calls | Use For |
+|--------|------------|------|-----------|---------|
+| `zt_live_` | Production | Real credits | Real agents | Live integrations |
+| `zt_test_` | Sandbox | Free (0 credits) | Deterministic canned responses | Development, testing, CI |
+
+<Warning>
+  Never share API keys in conversation, chat logs, or client-side code.
+  Always use environment variables or a secrets manager.
+</Warning>
+
+## Getting a Key
+
+1. Sign up at [developers.zebratruth.ai](https://developers.zebratruth.ai)
+2. Navigate to **Dashboard → API Keys**
+3. Click **Create Key** and choose a name and environment (live or test)
+4. Copy the key immediately — it is shown only once
+
+## Validating Your Key
+
+```bash
+curl https://api.zebratruth.ai/v1/whoami \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+```
+
+```json 200 — Valid Key
+{
+  "tenantId": "tenant_abc",
+  "tier": "starter",
+  "creditsRemaining": 1420,
+  "creditsTotal": 1665,
+  "rateLimitPerMinute": 60
+}
+```
+
+```json 401 — Invalid Key
+{
+  "error": "Invalid API key"
+}
+```
+
+## Test Mode
+
+Test keys (`zt_test_...`) return deterministic sandbox responses:
+- No cost engine — no credits deducted
+- No real LLM calls — responses are pre-built canned scenarios
+- Deterministic — same input always produces the same output
+- Responses include `_meta.mode: "test"` so you can detect sandbox mode
+
+```json Test Mode Response
+{
+  "score": 55,
+  "decision": "HOLD",
+  "checks": [...],
+  "_meta": {
+    "mode": "test",
+    "sandbox": true,
+    "creditsCharged": 0,
+    "estimatedProductionCost": 47,
+    "scenarioId": "claim-violation"
+  }
+}
+```
+
+## Idempotency
+
+All mutating endpoints (POST, DELETE) require an `Idempotency-Key` header:
+
+```bash
+Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+```
+
+- Generate a new UUID for each distinct request
+- Reuse the same key to safely retry a failed request
+- Prevents duplicate execution and double-charging
+- Keys expire after 24 hours
+
+## Rate Limits
+
+| Tier | Requests/min | Concurrent Load Units |
+|------|-------------|----------------------|
+| Free | 10 | 2 |
+| Starter | 60 | 8 |
+| Pro | 300 | 25 |
+| Enterprise | Custom | Custom |
+
+When rate-limited, the API returns `429` with a `Retry-After` header indicating seconds to wait.

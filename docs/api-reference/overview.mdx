@@ -1,0 +1,48 @@
+---
+title: API Reference
+description: Complete endpoint reference for the ZebraTruth Compliance API
+---
+
+# API Reference
+
+Base URL: `https://api.zebratruth.ai/v1`
+
+All endpoints require authentication via `Authorization: Bearer {api_key}`.
+All mutating endpoints (POST, DELETE) require an `Idempotency-Key` header.
+
+## Endpoint Groups
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key">
+    - `GET /whoami` — Validate key, tenant info
+    - `GET /usage` — Credit balance
+    - `GET /version` — Engine version
+  </Card>
+  <Card title="Compliance" icon="shield-check">
+    - `POST /compliance/check` — Run compliance check
+    - `POST /compliance/check-image` — Image rights clearance
+  </Card>
+  <Card title="Agents" icon="robot">
+    - `GET /agents` — List available agents
+    - `POST /agents/{agentId}` — Invoke single agent
+  </Card>
+  <Card title="Jobs" icon="clock">
+    - `GET /compliance/jobs/{jobId}` — Poll status
+    - `GET /compliance/jobs/{jobId}/trace` — Agent trace
+    - `GET /compliance/jobs/{jobId}/stream` — Resume SSE
+  </Card>
+  <Card title="Reports" icon="file-lines">
+    - `GET /reports/{reportId}` — Get report
+    - `POST /reports/{reportId}/replay` — Replay check
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    - `GET /logs` — Request history
+    - `GET /webhooks/deliveries` — Webhook delivery logs
+  </Card>
+</CardGroup>
+
+<Note>
+  The API reference pages below are auto-generated from the
+  [OpenAPI spec](https://github.com/dafstar76/zebratruth-ai-labs/blob/master/openapi/zebratruth-v1.yaml).
+  Each endpoint includes request/response schemas and a playground for testing.
+</Note>

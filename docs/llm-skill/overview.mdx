@@ -1,0 +1,42 @@
+---
+title: LLM Skill Overview
+description: Integrate ZebraTruth compliance into any LLM agent via SKILL.md
+---
+
+# LLM Skill (SKILL.md)
+
+ZebraTruth can be integrated into **any LLM agent** by injecting a single markdown file into the agent's context. No SDK, no code generation, no tool schemas — the LLM reads the documentation and makes HTTP calls.
+
+## How It Works
+
+1. The `SKILL.md` file is injected into the LLM's system prompt
+2. The LLM learns how to authenticate, run checks, and interpret results
+3. When the user asks to check content, the LLM calls the ZebraTruth API via HTTP
+4. Results are interpreted and presented to the user with actionable recommendations
+
+## What the LLM Can Do
+
+- Validate API keys via `GET /whoami`
+- Run compliance checks (sync, stream, or async)
+- Invoke individual agents for targeted checks
+- Interpret scores, decisions, and annotations
+- Check credit balance before expensive operations
+- Handle errors (401, 402, 429) with appropriate user guidance
+
+## Why This Approach
+
+Inspired by [Mosaic AI Labs](https://github.com/mosaic-ai-labs/skills), the SKILL.md pattern is:
+
+- **Platform-agnostic** — works with Claude Code, OpenClaw, or any LLM that supports markdown injection
+- **No SDK to maintain** — the integration IS the documentation
+- **Always up to date** — update the SKILL.md, all integrations update automatically
+- **Lazy-loaded** — workflow docs are loaded on demand, keeping base context small
+
+## SKILL.md Structure
+
+The skill file has two parts:
+
+1. **YAML frontmatter** — machine-readable metadata (name, API base URL, auth method, capabilities)
+2. **Markdown body** — the LLM system prompt (auth flow, quick start, result interpretation, workflow routing table)
+
+Detailed workflows are in separate files loaded by the LLM on demand.

@@ -1,0 +1,84 @@
+---
+title: Annotations
+description: Map compliance issues to content locations for native UI embedding
+---
+
+# Annotations
+
+Annotations map compliance issues to **specific locations** in your content. They're what makes ZebraTruth results feel native inside client products — not just raw JSON reports.
+
+## Annotation Types
+
+### Text Span
+
+For scripts, ad copy, captions, descriptions. Uses character offsets.
+
+```json
+{
+  "type": "text-span",
+  "agentId": "advertising-law",
+  "severity": "high",
+  "message": "'Guaranteed' claim may violate FTC rules",
+  "suggestion": "Consider 'may help' instead",
+  "textLocation": {
+    "start": 120,
+    "end": 137,
+    "matchedText": "guaranteed results"
+  }
+}
+```
+
+### Timeline
+
+For video content. Uses millisecond ranges.
+
+```json
+{
+  "type": "timeline",
+  "agentId": "metadata-labeling",
+  "severity": "medium",
+  "message": "AI-generated segment missing disclosure label",
+  "suggestion": "Add visible AI disclosure overlay",
+  "timelineLocation": {
+    "startMs": 15000,
+    "endMs": 28000,
+    "track": "video"
+  }
+}
+```
+
+### Image Region
+
+For visual content. Uses bounding box coordinates.
+
+```json
+{
+  "type": "image-region",
+  "agentId": "rights-clearance-image",
+  "severity": "high",
+  "message": "Possible celebrity face detected",
+  "suggestion": "Obtain likeness rights or replace",
+  "imageLocation": {
+    "imageUrl": "https://example.com/ad.jpg",
+    "boundingBox": { "x": 120, "y": 45, "width": 200, "height": 250 }
+  }
+}
+```
+
+### Global
+
+Applies to the entire content, not a specific location.
+
+```json
+{
+  "type": "global",
+  "agentId": "platform-policy",
+  "severity": "medium",
+  "message": "YouTube requires AI disclosure toggle for AI-generated content",
+  "suggestion": "Enable the AI-generated content disclosure in YouTube Studio"
+}
+```
+
+## Using Annotations in Your UI
+
+See [Embedding Annotations guide](/docs/guides/embedding-annotations) for detailed implementation patterns including suggested severity colors and grouping strategies.

@@ -1,0 +1,116 @@
+---
+title: Embedding Annotations in Your UI
+description: Step-by-step guide
+---
+
+# Embedding Annotations in Your UI
+
+Annotations map compliance issues to specific locations in content. This guide shows how to use them to highlight issues natively in your application.
+
+## Annotation Types
+
+### Text Span
+
+For scripts, ad copy, captions, descriptions.
+
+```json
+{
+  "type": "text-span",
+  "agentId": "advertising-law",
+  "severity": "high",
+  "message": "'Guaranteed' claim may violate FTC rules",
+  "suggestion": "Consider 'may help' instead",
+  "textLocation": {
+    "start": 120,
+    "end": 137,
+    "matchedText": "guaranteed results"
+  }
+}
+```
+
+**How to use:**
+- `start` and `end` are character offsets (0-indexed) into the original `content.text`
+- Highlight `matchedText` in the editor with the appropriate severity color
+- Show `message` on hover/click
+- Show `suggestion` as an inline fix option
+
+### Timeline
+
+For video content with timestamps.
+
+```json
+{
+  "type": "timeline",
+  "agentId": "metadata-labeling",
+  "severity": "medium",
+  "message": "AI-generated segment missing disclosure label",
+  "suggestion": "Add visible AI disclosure overlay",
+  "timelineLocation": {
+    "startMs": 15000,
+    "endMs": 28000,
+    "track": "video"
+  }
+}
+```
+
+**How to use:**
+- Mark the flagged time range on the video timeline
+- `track` indicates which track (video, audio, subtitle)
+- Show a warning marker at `startMs` on the timeline scrubber
+
+### Image Region
+
+For visual content with detected elements.
+
+```json
+{
+  "type": "image-region",
+  "agentId": "rights-clearance-image",
+  "severity": "high",
+  "message": "Possible celebrity face detected",
+  "suggestion": "Obtain likeness rights or replace",
+  "imageLocation": {
+    "imageUrl": "https://example.com/ad.jpg",
+    "boundingBox": { "x": 120, "y": 45, "width": 200, "height": 250 }
+  }
+}
+```
+
+**How to use:**
+- Draw a highlight rectangle at the bounding box coordinates
+- `boundingBox` uses pixel coordinates relative to the original image dimensions
+
+### Global
+
+Applies to the entire content, not a specific location.
+
+```json
+{
+  "type": "global",
+  "agentId": "platform-policy",
+  "severity": "medium",
+  "message": "YouTube requires AI disclosure toggle for AI-generated content",
+  "suggestion": "Enable the AI-generated content disclosure in YouTube Studio"
+}
+```
+
+**How to use:**
+- Show as a banner or top-level warning
+- Not tied to a specific content location
+
+## Severity Colors (Suggested)
+
+| Severity | Color | Usage |
+|----------|-------|-------|
+| critical | Red (#FF3B30) | Bright red highlight, blocking banner |
+| high | Orange (#FF9500) | Orange highlight, prominent warning |
+| medium | Yellow (#FFCC00) | Yellow highlight, informational |
+| low | Blue (#007AFF) | Subtle blue indicator |
+| info | Gray (#8E8E93) | Gray text, no highlight |
+
+## Grouping Annotations
+
+For a clean UI, group annotations by:
+1. **By agent** — "Advertising Law: 2 issues, Platform Policy: 1 issue"
+2. **By severity** — Show critical/high first
+3. **By location** — Sort text-span by `start` offset, timeline by `startMs`

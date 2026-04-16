@@ -1,0 +1,51 @@
+---
+title: Installation
+description: Install the ZebraTruth compliance skill in your LLM agent
+---
+
+# Installation
+
+## Claude Code
+
+```bash
+claude plugin install zebratruth-compliance@zebratruth-ai-labs
+```
+
+Then set your API key:
+```bash
+export ZEBRATRUTH_API_KEY=zt_live_your_key_here
+```
+
+## OpenClaw
+
+```bash
+openclaw skills install zebratruth-compliance
+openclaw config set env.vars.ZEBRATRUTH_API_KEY "zt_live_your_key_here"
+openclaw gateway restart
+```
+
+## Manual Integration
+
+For any LLM platform that supports markdown injection:
+
+1. Download [SKILL.md](https://github.com/dafstar76/zebratruth-ai-labs/blob/master/skills/zebratruth-compliance/SKILL.md)
+2. Include it in the LLM's system prompt or context
+3. Set `ZEBRATRUTH_API_KEY` in the environment
+
+The LLM will automatically learn how to authenticate, run checks, and interpret results.
+
+## Workflow Documents
+
+The SKILL.md references 9 workflow documents for detailed procedures. These are loaded by the LLM on demand — you don't need to include them all upfront:
+
+| Workflow | Purpose |
+|----------|---------|
+| `content-compliance-check.md` | Full check procedure |
+| `image-rights-clearance.md` | Image-specific checks |
+| `streaming-integration.md` | SSE consumption |
+| `async-webhook-execution.md` | Submit-then-poll |
+| `individual-agents.md` | Per-agent invocation |
+| `interpreting-reports.md` | Scores & decisions |
+| `embedding-annotations.md` | Map to UI |
+| `cost-and-credits.md` | Budget management |
+| `debugging.md` | Logs, traces, replay |

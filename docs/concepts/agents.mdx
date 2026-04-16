@@ -1,0 +1,47 @@
+---
+title: Compliance Agents
+description: How ZebraTruth's AI agents work
+---
+
+# Compliance Agents
+
+ZebraTruth uses a pipeline of specialized AI agents, each focused on a specific compliance domain. Agents are added regularly — always use `GET /agents` to discover available agents dynamically.
+
+## Current Agents
+
+| Agent | Phase | Input | What It Checks |
+|-------|-------|-------|---------------|
+| **Jurisdiction Detection** | 1 | Text | Detects applicable laws (FTC, UCPD, ASA, etc.) |
+| **Advertising Law** | 2 | Text | Claim substantiation, endorsement rules, targeting |
+| **Platform Policy** | 2 | Text | YouTube, Instagram, Facebook, TikTok, LinkedIn rules |
+| **Metadata & Labeling** | 3 | Text | C2PA Content Credentials, AI disclosure labels |
+| **Rights Clearance (Text)** | 3 | Text | Celebrity references, trademarks, copyrighted characters |
+| **Rights Clearance (Image)** | 3 | Image | Celebrity faces, logos, watermarks via computer vision |
+| **Compliance Score** | 4 | All | Deterministic scoring from all checks |
+
+## Pipeline Phases
+
+In **full mode**, agents run in 4 sequential phases with content enrichment:
+
+1. **Phase 1** — Jurisdiction agent detects applicable laws
+2. **Phase 2** — Advertising Law + Platform agents (parallel), enriched with Phase 1 findings
+3. **Phase 3** — Metadata + Rights agents (parallel), enriched with Phase 1+2 findings
+4. **Phase 4** — Score agent aggregates all checks
+
+In **fast mode**, all agents run in parallel without enrichment.
+
+## 3-Model Sub-Agent Pipeline
+
+Each text agent internally runs a 3-stage pipeline:
+
+| Stage | Model | Role | Cacheable |
+|-------|-------|------|-----------|
+| A | Perplexity Pro | Legal research & citations | Yes (30-day TTL) |
+| B | GPT-5.2 | Content-specific risk analysis | No |
+| C | claude-opus-4-6 | Structured compliance writing | No |
+
+## Invoking a Single Agent
+
+Call any agent directly via `POST /agents/{agentId}`. Costs ~8-12 credits vs ~47 for a full check.
+
+See [Individual Agents guide](/docs/guides/individual-agents) for details.

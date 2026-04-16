@@ -1,0 +1,87 @@
+---
+title: Cost  Credits Management
+description: Step-by-step guide
+---
+
+# Cost & Credits Management
+
+ZebraTruth uses a credits-based billing system. Understanding costs helps optimize usage.
+
+## Check Your Balance
+
+```
+GET https://api.zebratruth.ai/v1/usage
+Authorization: Bearer {api_key}
+```
+
+**Response:**
+```json
+{
+  "creditsRemaining": 1420,
+  "creditsTotal": 1665,
+  "creditsUsedThisMonth": 245,
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-04-30",
+  "tier": "starter"
+}
+```
+
+## Cost Estimates
+
+| Operation | Approx Credits | Notes |
+|-----------|---------------|-------|
+| Fast mode text check | ~12 | All agents parallel |
+| Full mode text check | ~47 | 4-phase pipeline, thorough |
+| Single agent call | ~8-12 | 1 agent × 3 LLM stages |
+| Image rights check | ~5/image | CV pipeline (Rekognition + Vision) |
+| Cached check (same content) | 0 | Returns cached result |
+
+## Cost Optimization Strategies
+
+1. **Use fast mode** unless thorough analysis is needed
+2. **Cache awareness** — Identical content + jurisdictions + platforms returns cached results at 0 credits
+3. **Single agents** — If you only need to re-check one aspect, call the agent directly instead of the full pipeline
+4. **Batch wisely** — Check credits before submitting a batch of async jobs
+
+## Plans
+
+| Plan | Price | Credits/mo | Rate Limit |
+|------|-------|-----------|-----------|
+| Free | $0 | 1,332 lifetime | 10/min |
+| Starter | $49.99/mo | 1,665/mo | 60/min |
+| Pro | $199.99/mo | 6,660/mo | 300/min |
+| Enterprise | Custom | Custom | Custom |
+
+## Reading Cost Breakdowns
+
+Every response includes `costBreakdown`:
+
+```json
+{
+  "totalCredits": 47,
+  "agents": [
+    { "agent": "jurisdiction", "stage": "A", "credits": 2, "cached": true },
+    { "agent": "jurisdiction", "stage": "B", "credits": 3 },
+    { "agent": "jurisdiction", "stage": "C", "credits": 8 }
+  ]
+}
+```
+
+- `cached: true` — Research stage used cache (0 provider cost)
+- Stage A = legal research (Perplexity, cacheable)
+- Stage B = law interpretation (GPT-5.2)
+- Stage C = compliance writing (claude-opus-4-6)
+
+## Handling 402 (Insufficient Credits)
+
+When credits are exhausted:
+```json
+{
+  "error": "Insufficient credits",
+  "creditsRemaining": 3,
+  "creditsNeeded": 47,
+  "upgradeUrl": "https://developers.zebratruth.ai/billing/upgrade"
+}
+```
+
+Present the `upgradeUrl` to the user with context about their remaining credits.
