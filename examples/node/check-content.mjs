@@ -12,26 +12,35 @@ if (!API_KEY) {
 const API_BASE = "https://api.zebratruth.ai/v1";
 
 async function main() {
+  async function apiCall(url, options = {}) {
+    const res = await fetch(url, {
+      ...options,
+      headers: { Authorization: `Bearer ${API_KEY}`, ...options.headers },
+    });
+    if (!res.ok) {
+      console.error(`API error: ${res.status} ${res.statusText}`);
+      const body = await res.text();
+      console.error(body);
+      process.exit(1);
+    }
+    return res.json();
+  }
+
   // Step 1: Validate key
   console.log("=== Validating API key ===");
-  const whoami = await fetch(`${API_BASE}/whoami`, {
-    headers: { Authorization: `Bearer ${API_KEY}` },
-  }).then((r) => r.json());
+  const whoami = await apiCall(`${API_BASE}/whoami`);
   console.log(whoami);
 
   // Step 2: Check credits
   console.log("\n=== Checking credits ===");
-  const usage = await fetch(`${API_BASE}/usage`, {
-    headers: { Authorization: `Bearer ${API_KEY}` },
-  }).then((r) => r.json());
+  const usage = await apiCall(`${API_BASE}/usage`);
   console.log(`Credits remaining: ${usage.creditsRemaining}/${usage.creditsTotal}`);
 
   // Step 3: Run compliance check
   console.log("\n=== Running compliance check ===");
-  const result = await fetch(`${API_BASE}/compliance/check`, {
+  const result = await apiCall(`${API_BASE}/compliance/check`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${API_KEY}`,
       "Content-Type": "application/json",
       "Idempotency-Key": crypto.randomUUID(),
     },
@@ -44,7 +53,7 @@ async function main() {
       mode: "fast",
       responseMode: "sync",
     }),
-  }).then((r) => r.json());
+  });
 
   // Step 4: Display results
   console.log(`\nScore: ${result.score}/100`);

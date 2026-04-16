@@ -57,10 +57,10 @@ Idempotency-Key: {uuid}
   "annotations": [...],
   "costBreakdown": {
     "totalCredits": 8,
-    "stages": [
-      { "stage": "A", "model": "perplexity/sonar-pro", "credits": 2, "cached": true },
-      { "stage": "B", "model": "gpt-5.2", "credits": 3 },
-      { "stage": "C", "model": "claude-opus-4-6", "credits": 3 }
+    "agents": [
+      { "agent": "advertising-law", "stage": "A", "model": "perplexity/sonar-pro", "credits": 2, "cached": true },
+      { "agent": "advertising-law", "stage": "B", "model": "gpt-5.2", "credits": 3 },
+      { "agent": "advertising-law", "stage": "C", "model": "claude-opus-4-6", "credits": 3 }
     ]
   }
 }

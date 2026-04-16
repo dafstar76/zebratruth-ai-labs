@@ -35,7 +35,11 @@ The API key starts with `zt_live_` (production) or `zt_test_` (test).
 
 **Step 1:** Check if `ZEBRATRUTH_API_KEY` is set in the environment.
 
-**Step 2:** If not set, ask the user for their API key. They can get one at https://developers.zebratruth.ai
+**Step 2:** If not set, instruct the user to set it as an environment variable. They can get a key at https://developers.zebratruth.ai — do NOT accept API keys directly in conversation (they would be logged in chat history).
+
+```
+export ZEBRATRUTH_API_KEY=zt_live_your_key_here
+```
 
 **Step 3:** Validate the key before proceeding:
 
@@ -89,7 +93,7 @@ Idempotency-Key: {generate-uuid}
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `content.imageUrls` | string[] | Image URLs to check for rights clearance |
+| `content.imageUrls` | string[] | Image URLs to check for rights clearance (runs image agents alongside text agents). For image-only checks, use the dedicated `POST /v1/compliance/check-image` endpoint instead. |
 | `responseMode` | string | `"sync"` (default), `"stream"` (SSE), or `"async"` (webhook) |
 | `webhookUrl` | string | Required for async mode — where to POST results |
 | `callbackId` | string | Your correlation ID, echoed back in response |
@@ -142,8 +146,8 @@ Idempotency-Key: {generate-uuid}
 | Score | Decision | Meaning |
 |-------|----------|---------|
 | 80-100 | `PUBLISH` | Content is compliant. Safe to publish. |
-| 50-79 | `HOLD` | Issues found. Review the `checks` and `annotations` arrays. Fix flagged items. |
-| 0-49 | `BLOCK` | Critical violations. Must fix before publishing. |
+| 60-79 | `HOLD` | Issues found. Review the `checks` and `annotations` arrays. Fix flagged items. |
+| 0-59 | `BLOCK` | Significant or critical violations. Must fix before publishing. |
 
 ### Severity Levels
 

@@ -19,22 +19,32 @@ HEADERS = {
 }
 
 
+def api_call(method, path, **kwargs):
+    res = getattr(requests, method)(f"{API_BASE}{path}", headers=HEADERS, **kwargs)
+    if not res.ok:
+        print(f"API error: {res.status_code} {res.reason}", file=__import__('sys').stderr)
+        print(res.text, file=__import__('sys').stderr)
+        raise SystemExit(1)
+    return res.json()
+
+
 def main():
     # Step 1: Validate key
     print("=== Validating API key ===")
-    whoami = requests.get(f"{API_BASE}/whoami", headers=HEADERS).json()
+    whoami = api_call("get", "/whoami")
     print(json.dumps(whoami, indent=2))
 
     # Step 2: Check credits
     print("\n=== Checking credits ===")
-    usage = requests.get(f"{API_BASE}/usage", headers=HEADERS).json()
+    usage = api_call("get", "/usage")
     print(f"Credits remaining: {usage['creditsRemaining']}/{usage['creditsTotal']}")
 
     # Step 3: Run compliance check
     print("\n=== Running compliance check ===")
-    result = requests.post(
-        f"{API_BASE}/compliance/check",
-        headers={**HEADERS, "Idempotency-Key": str(uuid.uuid4())},
+    result = api_call(
+        "post",
+        "/compliance/check",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
         json={
             "jurisdictions": ["us", "eu"],
             "platforms": ["youtube", "instagram"],
@@ -47,7 +57,7 @@ def main():
             "mode": "fast",
             "responseMode": "sync",
         },
-    ).json()
+    )
 
     # Step 4: Display results
     print(f"\nScore: {result['score']}/100")

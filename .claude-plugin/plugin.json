@@ -4,5 +4,17 @@
   "description": "AI-powered compliance checking for advertising content — jurisdiction laws, platform policies, rights clearance, and scoring with embeddable annotations",
   "author": "ZebraTruth",
   "homepage": "https://developers.zebratruth.ai",
-  "license": "MIT"
+  "license": "MIT",
+  "entryPoint": "skills/zebratruth-compliance/SKILL.md",
+  "requires": {
+    "env": ["ZEBRATRUTH_API_KEY"]
+  },
+  "capabilities": [
+    "content-compliance-check",
+    "image-rights-clearance",
+    "streaming-progressive-results",
+    "async-webhook-execution",
+    "individual-agent-invocation",
+    "annotation-mapping"
+  ]
 }

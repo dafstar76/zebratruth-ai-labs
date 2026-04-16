@@ -28,7 +28,7 @@ Idempotency-Key: {uuid}
   "status": "queued",
   "estimatedCredits": 47,
   "queuePosition": 1,
-  "pollUrl": "/api/v1/compliance/jobs/job_xyz789"
+  "pollUrl": "/v1/compliance/jobs/job_xyz789"
 }
 ```
 
@@ -52,6 +52,24 @@ Authorization: Bearer {api_key}
 ```
 
 Status values: `queued` → `pending` → `running` → `completed` | `failed` | `dead`
+
+**Completed response (includes full report inline):**
+```json
+{
+  "jobId": "job_xyz789",
+  "status": "completed",
+  "completedAgents": ["jurisdiction-detection", "advertising-law", "platform-policy", "metadata-labeling", "rights-clearance-text", "rights-clearance-image", "compliance-score"],
+  "totalAgents": 7,
+  "result": {
+    "score": 85,
+    "decision": "PUBLISH",
+    "checks": [...],
+    "annotations": [...],
+    "versionInfo": {...},
+    "costBreakdown": {...}
+  }
+}
+```
 
 ## Step 3: Receive Webhook
 
@@ -86,7 +104,7 @@ When the check completes, ZebraTruth POSTs to your `webhookUrl`:
 
 - 3 retry attempts: 1s, 5s, 25s exponential backoff
 - After 3 failures: moved to dead letter queue
-- Check failed deliveries: `GET /api/v1/webhooks/deliveries?status=dead`
+- Check failed deliveries: `GET /v1/webhooks/deliveries?status=dead`
 
 ## Error Events
 
