@@ -5,7 +5,7 @@ Call a single compliance agent directly instead of running the full pipeline. Us
 ## Discover Available Agents
 
 ```
-GET https://api.zebratruth.com/v1/agents
+GET https://api.zebratruth.ai/v1/agents
 Authorization: Bearer {api_key}
 ```
 
@@ -37,7 +37,7 @@ Always use this endpoint to discover agents — new agents are added regularly.
 ## Invoke a Single Agent
 
 ```
-POST https://api.zebratruth.com/v1/agents/{agentId}
+POST https://api.zebratruth.ai/v1/agents/{agentId}
 Authorization: Bearer {api_key}
 Content-Type: application/json
 Idempotency-Key: {uuid}

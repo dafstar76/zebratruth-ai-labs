@@ -2,8 +2,8 @@
 skill: zebratruth-compliance
 version: "1.0.0"
 description: "AI-powered compliance checking for advertising content — jurisdiction laws, platform policies, rights clearance, and scoring"
-homepage: https://developers.zebratruth.com
-api_base: https://api.zebratruth.com/v1
+homepage: https://developers.zebratruth.ai
+api_base: https://api.zebratruth.ai/v1
 auth: bearer_token
 auth_header: "Authorization: Bearer {api_key}"
 auth_validation: GET /whoami
@@ -35,12 +35,12 @@ The API key starts with `zt_live_` (production) or `zt_test_` (test).
 
 **Step 1:** Check if `ZEBRATRUTH_API_KEY` is set in the environment.
 
-**Step 2:** If not set, ask the user for their API key. They can get one at https://developers.zebratruth.com
+**Step 2:** If not set, ask the user for their API key. They can get one at https://developers.zebratruth.ai
 
 **Step 3:** Validate the key before proceeding:
 
 ```
-GET https://api.zebratruth.com/v1/whoami
+GET https://api.zebratruth.ai/v1/whoami
 Authorization: Bearer {api_key}
 ```
 
@@ -60,7 +60,7 @@ If validation fails with 401, ask the user to check their key.
 ## Quick Start: Run a Compliance Check
 
 ```
-POST https://api.zebratruth.com/v1/compliance/check
+POST https://api.zebratruth.ai/v1/compliance/check
 Authorization: Bearer {api_key}
 Content-Type: application/json
 Idempotency-Key: {generate-uuid}
@@ -167,7 +167,7 @@ Annotations map compliance issues to specific locations in the content. Use them
 Agents are added regularly. Always discover dynamically:
 
 ```
-GET https://api.zebratruth.com/v1/agents
+GET https://api.zebratruth.ai/v1/agents
 ```
 
 Returns the list of available agents with their IDs, descriptions, and capabilities.
@@ -177,7 +177,7 @@ Returns the list of available agents with their IDs, descriptions, and capabilit
 Before running expensive checks:
 
 ```
-GET https://api.zebratruth.com/v1/usage
+GET https://api.zebratruth.ai/v1/usage
 ```
 
 Returns current credit balance and usage. Full mode costs ~4x fast mode. If credits are low, prefer fast mode or suggest the user upgrade.

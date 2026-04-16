@@ -9,7 +9,7 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-const API_BASE = "https://api.zebratruth.com/v1";
+const API_BASE = "https://api.zebratruth.ai/v1";
 
 async function main() {
   // Step 1: Validate key

@@ -12,7 +12,7 @@ API_KEY = os.environ.get("ZEBRATRUTH_API_KEY")
 if not API_KEY:
     raise SystemExit("Set ZEBRATRUTH_API_KEY environment variable")
 
-API_BASE = "https://api.zebratruth.com/v1"
+API_BASE = "https://api.zebratruth.ai/v1"
 HEADERS = {
     "Authorization": f"Bearer {API_KEY}",
     "Content-Type": "application/json",

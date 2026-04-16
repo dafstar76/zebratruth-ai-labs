@@ -5,7 +5,7 @@ Check images for celebrity faces, logos, watermarks, trademarks, and C2PA metada
 ## Endpoint
 
 ```
-POST https://api.zebratruth.com/v1/compliance/check-image
+POST https://api.zebratruth.ai/v1/compliance/check-image
 Authorization: Bearer {api_key}
 Content-Type: application/json
 Idempotency-Key: {uuid}

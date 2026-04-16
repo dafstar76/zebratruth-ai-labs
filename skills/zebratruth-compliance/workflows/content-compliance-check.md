@@ -13,7 +13,7 @@ Full procedure for running a compliance check in any of the three response modes
 ### Step 1: Check Credits
 
 ```
-GET https://api.zebratruth.com/v1/usage
+GET https://api.zebratruth.ai/v1/usage
 Authorization: Bearer {api_key}
 ```
 
@@ -38,7 +38,7 @@ If insufficient, inform the user and suggest upgrading at the `upgradeUrl` in th
 ### Step 3: Submit the Check
 
 ```
-POST https://api.zebratruth.com/v1/compliance/check
+POST https://api.zebratruth.ai/v1/compliance/check
 Authorization: Bearer {api_key}
 Content-Type: application/json
 Idempotency-Key: {generate-a-uuid-here}
@@ -88,11 +88,11 @@ If the decision is HOLD or BLOCK:
 
 ```bash
 # 1. Check credits
-curl https://api.zebratruth.com/v1/usage \
+curl https://api.zebratruth.ai/v1/usage \
   -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
 
 # 2. Run check
-curl -X POST https://api.zebratruth.com/v1/compliance/check \
+curl -X POST https://api.zebratruth.ai/v1/compliance/check \
   -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \

@@ -23,14 +23,14 @@ New agents are added regularly. Use `GET /api/v1/agents` to discover all availab
 ## Quick Start
 
 ```bash
-# 1. Get your API key at https://developers.zebratruth.com
+# 1. Get your API key at https://developers.zebratruth.ai
 
 # 2. Validate your key
-curl https://api.zebratruth.com/v1/whoami \
+curl https://api.zebratruth.ai/v1/whoami \
   -H "Authorization: Bearer zt_live_your_key_here"
 
 # 3. Run a compliance check
-curl -X POST https://api.zebratruth.com/v1/compliance/check \
+curl -X POST https://api.zebratruth.ai/v1/compliance/check \
   -H "Authorization: Bearer zt_live_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -69,7 +69,7 @@ Direct HTTP calls from any language or platform. Three response modes:
 - **Stream** — SSE events per agent (progressive results)
 - **Async** — webhook callback on completion
 
-[Full API documentation](https://developers.zebratruth.com/docs)
+[Full API documentation](https://developers.zebratruth.ai/docs)
 
 ### LLM Skill (SKILL.md)
 Drop [`skills/zebratruth-compliance/SKILL.md`](skills/zebratruth-compliance/SKILL.md) into any LLM agent's context. The agent learns to authenticate, run checks, and interpret results — no SDK needed.
@@ -141,13 +141,13 @@ Credits-based billing. $1 of billed cost = 111 credits.
 | Pro | $199.99/mo | 6,660/mo | 300/min | 25 units |
 | Enterprise | Custom | Custom | Custom | Custom |
 
-[Sign up at developers.zebratruth.com](https://developers.zebratruth.com)
+[Sign up at developers.zebratruth.ai](https://developers.zebratruth.ai)
 
 ## Links
 
-- [Developer Portal](https://developers.zebratruth.com) — Sign up, API keys, usage dashboard
-- [API Documentation](https://developers.zebratruth.com/docs) — Full endpoint reference
-- [Status Page](https://status.zebratruth.com) — System status and uptime
+- [Developer Portal](https://developers.zebratruth.ai) — Sign up, API keys, usage dashboard
+- [API Documentation](https://developers.zebratruth.ai/docs) — Full endpoint reference
+- [Status Page](https://status.zebratruth.ai) — System status and uptime
 - [ZebraTruth Studio](https://zebratruthai.vercel.app) — Reference implementation (video editor with compliance)
 
 ## License

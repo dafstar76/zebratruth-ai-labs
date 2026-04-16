@@ -5,7 +5,7 @@ Submit a compliance check and receive results via webhook callback. Best for bat
 ## Step 1: Submit the Check
 
 ```
-POST https://api.zebratruth.com/v1/compliance/check
+POST https://api.zebratruth.ai/v1/compliance/check
 Authorization: Bearer {api_key}
 Content-Type: application/json
 Idempotency-Key: {uuid}
@@ -37,7 +37,7 @@ Budget is reserved before the job enters the queue. If credits are insufficient,
 ## Step 2: Poll for Status (optional)
 
 ```
-GET https://api.zebratruth.com/v1/compliance/jobs/job_xyz789
+GET https://api.zebratruth.ai/v1/compliance/jobs/job_xyz789
 Authorization: Bearer {api_key}
 ```
 

@@ -7,7 +7,7 @@ Tools for debugging compliance checks, viewing request logs, inspecting agent tr
 Query your API request history:
 
 ```
-GET https://api.zebratruth.com/v1/logs?externalId=my-project-123&since=2026-04-01&limit=50
+GET https://api.zebratruth.ai/v1/logs?externalId=my-project-123&since=2026-04-01&limit=50
 Authorization: Bearer {api_key}
 ```
 
@@ -36,7 +36,7 @@ Filter by `externalId` to find all requests related to your project.
 Get detailed per-agent metrics for a job:
 
 ```
-GET https://api.zebratruth.com/v1/compliance/jobs/{jobId}/trace
+GET https://api.zebratruth.ai/v1/compliance/jobs/{jobId}/trace
 Authorization: Bearer {api_key}
 ```
 
@@ -82,7 +82,7 @@ Use this to understand:
 Re-run the exact same check to compare results (e.g., after a rules update):
 
 ```
-POST https://api.zebratruth.com/v1/reports/{reportId}/replay
+POST https://api.zebratruth.ai/v1/reports/{reportId}/replay
 Authorization: Bearer {api_key}
 Idempotency-Key: {new-uuid}
 ```

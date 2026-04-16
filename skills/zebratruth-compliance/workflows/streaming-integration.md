@@ -5,7 +5,7 @@ Consume progressive compliance results via Server-Sent Events. Each agent fires 
 ## Endpoint
 
 ```
-POST https://api.zebratruth.com/v1/compliance/check
+POST https://api.zebratruth.ai/v1/compliance/check
 Authorization: Bearer {api_key}
 Content-Type: application/json
 Idempotency-Key: {uuid}
@@ -54,7 +54,7 @@ data: {"reportId": "rpt_abc", "versionInfo": {...}, "costBreakdown": {...}}
 If the SSE connection drops, resume from the last completed agent:
 
 ```
-GET https://api.zebratruth.com/v1/compliance/jobs/{jobId}/stream?resumeFrom=advertising-law
+GET https://api.zebratruth.ai/v1/compliance/jobs/{jobId}/stream?resumeFrom=advertising-law
 Authorization: Bearer {api_key}
 ```
 

@@ -5,7 +5,7 @@ ZebraTruth uses a credits-based billing system. Understanding costs helps optimi
 ## Check Your Balance
 
 ```
-GET https://api.zebratruth.com/v1/usage
+GET https://api.zebratruth.ai/v1/usage
 Authorization: Bearer {api_key}
 ```
 
@@ -75,7 +75,7 @@ When credits are exhausted:
   "error": "Insufficient credits",
   "creditsRemaining": 3,
   "creditsNeeded": 47,
-  "upgradeUrl": "https://developers.zebratruth.com/billing/upgrade"
+  "upgradeUrl": "https://developers.zebratruth.ai/billing/upgrade"
 }
 ```
 

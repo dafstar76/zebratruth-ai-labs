@@ -3,7 +3,7 @@
 # Usage: ZEBRATRUTH_API_KEY=zt_live_... ./check-content.sh
 
 API_KEY="${ZEBRATRUTH_API_KEY:?Set ZEBRATRUTH_API_KEY environment variable}"
-API_BASE="https://api.zebratruth.com/v1"
+API_BASE="https://api.zebratruth.ai/v1"
 
 echo "=== Step 1: Validate API key ==="
 curl -s "$API_BASE/whoami" \
