@@ -8,12 +8,9 @@
   },
   "favicon": "/favicon.svg",
   "colors": {
-    "primary": "#000000",
-    "light": "#FFFFFF",
-    "dark": "#000000",
-    "background": {
-      "dark": "#0f1117"
-    }
+    "primary": "#18E299",
+    "light": "#18E299",
+    "dark": "#0C8C5E"
   },
   "topbarLinks": [
     {
@@ -25,58 +22,71 @@
     "name": "Get API Key",
     "url": "https://developers.zebratruth.ai/signup"
   },
-  "tabs": [
-    {
-      "name": "Guides",
-      "url": "guides"
-    },
-    {
-      "name": "API Reference",
-      "url": "api-reference"
-    }
-  ],
-  "navigation": [
-    {
-      "group": "Getting Started",
-      "pages": [
-        "introduction",
-        "quickstart",
-        "authentication"
-      ]
-    },
-    {
-      "group": "Concepts",
-      "pages": [
-        "concepts/agents",
-        "concepts/compliance-pipeline",
-        "concepts/annotations",
-        "concepts/scoring",
-        "concepts/credits-and-billing",
-        "concepts/webhooks"
-      ]
-    },
-    {
-      "group": "Guides",
-      "pages": [
-        "guides/content-compliance-check",
-        "guides/image-rights-clearance",
-        "guides/streaming-integration",
-        "guides/async-webhook-execution",
-        "guides/individual-agents",
-        "guides/interpreting-reports",
-        "guides/embedding-annotations",
-        "guides/cost-and-credits",
-        "guides/debugging"
-      ]
-    },
-    {
-      "group": "LLM Skill",
-      "pages": [
-        "llm-skill/overview",
-        "llm-skill/installation"
-      ]
-    }
-  ],
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/agents",
+              "concepts/compliance-pipeline",
+              "concepts/annotations",
+              "concepts/scoring",
+              "concepts/credits-and-billing",
+              "concepts/webhooks"
+            ]
+          },
+          {
+            "group": "LLM Skill",
+            "pages": [
+              "llm-skill/overview",
+              "llm-skill/installation"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/content-compliance-check",
+              "guides/image-rights-clearance",
+              "guides/streaming-integration",
+              "guides/async-webhook-execution",
+              "guides/individual-agents",
+              "guides/interpreting-reports",
+              "guides/embedding-annotations",
+              "guides/cost-and-credits",
+              "guides/debugging"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API Reference",
+            "pages": [
+              "api-reference/overview"
+            ]
+          }
+        ]
+      }
+    ]
+  },
   "openapi": [
     "../openapi/zebratruth-v1.yaml"
   ],
