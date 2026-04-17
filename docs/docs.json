@@ -27,7 +27,7 @@
   "tabs": [
     {
       "name": "Guides",
-      "url": "docs/guides"
+      "url": "guides"
     },
     {
       "name": "API Reference",
@@ -38,46 +38,46 @@
     {
       "group": "Getting Started",
       "pages": [
-        "docs/introduction",
-        "docs/quickstart",
-        "docs/authentication"
+        "introduction",
+        "quickstart",
+        "authentication"
       ]
     },
     {
       "group": "Concepts",
       "pages": [
-        "docs/concepts/agents",
-        "docs/concepts/compliance-pipeline",
-        "docs/concepts/annotations",
-        "docs/concepts/scoring",
-        "docs/concepts/credits-and-billing",
-        "docs/concepts/webhooks"
+        "concepts/agents",
+        "concepts/compliance-pipeline",
+        "concepts/annotations",
+        "concepts/scoring",
+        "concepts/credits-and-billing",
+        "concepts/webhooks"
       ]
     },
     {
       "group": "Guides",
       "pages": [
-        "docs/guides/content-compliance-check",
-        "docs/guides/image-rights-clearance",
-        "docs/guides/streaming-integration",
-        "docs/guides/async-webhook-execution",
-        "docs/guides/individual-agents",
-        "docs/guides/interpreting-reports",
-        "docs/guides/embedding-annotations",
-        "docs/guides/cost-and-credits",
-        "docs/guides/debugging"
+        "guides/content-compliance-check",
+        "guides/image-rights-clearance",
+        "guides/streaming-integration",
+        "guides/async-webhook-execution",
+        "guides/individual-agents",
+        "guides/interpreting-reports",
+        "guides/embedding-annotations",
+        "guides/cost-and-credits",
+        "guides/debugging"
       ]
     },
     {
       "group": "LLM Skill",
       "pages": [
-        "docs/llm-skill/overview",
-        "docs/llm-skill/installation"
+        "llm-skill/overview",
+        "llm-skill/installation"
       ]
     }
   ],
   "openapi": [
-    "openapi/zebratruth-v1.yaml"
+    "../openapi/zebratruth-v1.yaml"
   ],
   "api": {
     "baseUrl": "https://api.zebratruth.ai/v1",
