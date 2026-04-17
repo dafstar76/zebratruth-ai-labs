@@ -1,0 +1,98 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "ZebraTruth API Documentation",
+  "logo": {
+    "dark": "/logo/dark.png",
+    "light": "/logo/light.png"
+  },
+  "favicon": "/favicon.png",
+  "colors": {
+    "primary": "#000000",
+    "light": "#FFFFFF",
+    "dark": "#000000",
+    "background": {
+      "dark": "#0f1117"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Dashboard",
+      "url": "https://developers.zebratruth.ai"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get API Key",
+    "url": "https://developers.zebratruth.ai/signup"
+  },
+  "tabs": [
+    {
+      "name": "Guides",
+      "url": "docs/guides"
+    },
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "docs/introduction",
+        "docs/quickstart",
+        "docs/authentication"
+      ]
+    },
+    {
+      "group": "Concepts",
+      "pages": [
+        "docs/concepts/agents",
+        "docs/concepts/compliance-pipeline",
+        "docs/concepts/annotations",
+        "docs/concepts/scoring",
+        "docs/concepts/credits-and-billing",
+        "docs/concepts/webhooks"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "docs/guides/content-compliance-check",
+        "docs/guides/image-rights-clearance",
+        "docs/guides/streaming-integration",
+        "docs/guides/async-webhook-execution",
+        "docs/guides/individual-agents",
+        "docs/guides/interpreting-reports",
+        "docs/guides/embedding-annotations",
+        "docs/guides/cost-and-credits",
+        "docs/guides/debugging"
+      ]
+    },
+    {
+      "group": "LLM Skill",
+      "pages": [
+        "docs/llm-skill/overview",
+        "docs/llm-skill/installation"
+      ]
+    }
+  ],
+  "openapi": [
+    "openapi/zebratruth-v1.yaml"
+  ],
+  "api": {
+    "baseUrl": "https://api.zebratruth.ai/v1",
+    "auth": {
+      "method": "bearer",
+      "name": "Authorization"
+    },
+    "playground": {
+      "mode": "simple"
+    }
+  },
+  "footerSocials": {
+    "github": "https://github.com/dafstar76/zebratruth-ai-labs"
+  },
+  "feedback": {
+    "thumbsRating": true
+  }
+}
