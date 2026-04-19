@@ -35,9 +35,16 @@ All mutating endpoints (POST, DELETE) require an `Idempotency-Key` header.
     - `GET /reports/{reportId}` — Get report
     - `POST /reports/{reportId}/replay` — Replay check
   </Card>
+  <Card title="Webhooks" icon="webhook">
+    - `GET /webhooks` — List registered webhooks
+    - `POST /webhooks` — Register webhook
+    - `DELETE /webhooks/{webhookId}` — Remove webhook
+    - `GET /webhooks/deliveries` — Delivery log
+  </Card>
   <Card title="Observability" icon="chart-line">
     - `GET /logs` — Request history
-    - `GET /webhooks/deliveries` — Webhook delivery logs
+    - `GET /policies/sources` — Available sources
+    - `GET /policies/status` — Activation status
   </Card>
 </CardGroup>
 

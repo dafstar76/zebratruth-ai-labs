@@ -84,9 +84,11 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check \
       }
     }
   ],
+  "cached": false,
+  "creditsCharged": 12,
   "versionInfo": {
-    "engineVersion": "1.3.2",
-    "rulesVersion": "2026-04-01"
+    "engineVersion": "1.0.0",
+    "rulesVersion": "2026-04-17"
   },
   "costBreakdown": {
     "totalCredits": 12,
@@ -104,6 +106,8 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check \
 | `checks[]` | Detailed findings from each agent |
 | `annotations[]` | UI-embeddable issue locations (text spans, video timestamps, image regions) |
 | `versionInfo` | Engine and rules versions (for comparing results over time) |
+| `cached` | `true` if this is a cached result (0 credits charged) |
+| `creditsCharged` | Credits deducted for this request |
 | `costBreakdown` | Per-agent credit usage |
 
 ## Next Steps

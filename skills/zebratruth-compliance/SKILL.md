@@ -131,9 +131,13 @@ Idempotency-Key: {generate-uuid}
     }
   ],
   "versionInfo": {
-    "engineVersion": "1.3.2",
-    "rulesVersion": "2026-04-01"
+    "engineVersion": "1.0.0",
+    "rulesVersion": "2026-04-17",
+    "agentVersions": { "advertising-law": "1.1.0", "jurisdiction-detection": "1.2.0" },
+    "modelVersions": { "perplexity/sonar-pro": "sonar-pro-2026", "claude-opus-4-6": "claude-opus-4-6" }
   },
+  "cached": false,
+  "creditsCharged": 12,
   "costBreakdown": {
     "totalCredits": 12,
     "agents": [...]
@@ -176,6 +180,21 @@ GET https://api.zebratruth.ai/v1/agents
 
 Returns the list of available agents with their IDs, descriptions, and capabilities.
 
+## Caching
+
+Identical checks (same content + jurisdictions + platforms + mode) return cached results at **zero credits**. Cached responses include:
+
+```json
+{
+  "cached": true,
+  "originalCost": 47,
+  "creditsCharged": 0,
+  ...full report...
+}
+```
+
+Cache is automatically invalidated when compliance rules are updated (`rulesVersion` changes).
+
 ## Cost Awareness
 
 Before running expensive checks:
@@ -187,6 +206,52 @@ GET https://api.zebratruth.ai/v1/usage
 Returns current credit balance and usage. Full mode costs ~4x fast mode. If credits are low, prefer fast mode or suggest the user upgrade.
 
 Each response includes `costBreakdown` showing per-agent credit usage.
+
+## Versioning
+
+Check the current engine and rules versions:
+
+```
+GET https://api.zebratruth.ai/v1/version
+```
+
+Every compliance response includes `versionInfo` with `engineVersion`, `rulesVersion`, per-agent versions, and model IDs. Use this to explain why results may differ over time.
+
+## Webhook Management
+
+Register webhooks to receive async compliance results:
+
+```
+POST https://api.zebratruth.ai/v1/webhooks
+{ "url": "https://your-app.com/webhooks/zebratruth", "events": ["check.completed", "check.failed"] }
+```
+
+Returns a `secret` (shown once) for verifying `X-ZebraTruth-Signature` HMAC headers.
+
+Other webhook endpoints:
+- `GET /v1/webhooks` — list registered webhooks
+- `DELETE /v1/webhooks/{webhookId}` — remove a webhook
+- `GET /v1/webhooks/deliveries` — view delivery log (filter by `?status=dead` for failures)
+
+## Request Logs
+
+Query your API request history:
+
+```
+GET https://api.zebratruth.ai/v1/logs?externalId=my-project&since=2026-04-01&limit=50
+```
+
+Returns requestId, method, path, statusCode, latencyMs, creditsUsed, cached flag.
+
+## Replay
+
+Re-run a previous check to compare results after a rules update:
+
+```
+POST https://api.zebratruth.ai/v1/reports/{reportId}/replay
+```
+
+Creates a new result from the same input. Compare `versionInfo` to see what changed.
 
 ## Available Workflows
 
@@ -214,6 +279,28 @@ For detailed step-by-step procedures, read any of these workflow documents:
 | 400 | Invalid request | Check the error message for missing/invalid fields |
 | 503 | Service paused (maintenance) | Wait and retry later |
 
+## Complete API Surface
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/whoami` | GET | Validate key, tenant info |
+| `/v1/usage` | GET | Credit balance |
+| `/v1/version` | GET | Engine/rules/agent versions |
+| `/v1/agents` | GET | Discover available agents |
+| `/v1/agents/{agentId}` | POST | Invoke single agent |
+| `/v1/compliance/check` | POST | Run compliance check (sync/stream/async) |
+| `/v1/compliance/check-image` | POST | Image rights clearance |
+| `/v1/compliance/jobs/{jobId}` | GET | Poll async job status |
+| `/v1/policies/sources` | GET | Available compliance sources |
+| `/v1/policies/status` | GET | Tenant's activated sources |
+| `/v1/reports/{reportId}` | GET | Retrieve stored report |
+| `/v1/reports/{reportId}/replay` | POST | Re-run same check |
+| `/v1/logs` | GET | Request log history |
+| `/v1/webhooks` | GET | List registered webhooks |
+| `/v1/webhooks` | POST | Register webhook |
+| `/v1/webhooks/{webhookId}` | DELETE | Remove webhook |
+| `/v1/webhooks/deliveries` | GET | Webhook delivery log |
+
 ## Important Rules
 
 1. Always include `Idempotency-Key` header on POST requests to prevent duplicate charges.
@@ -221,3 +308,6 @@ For detailed step-by-step procedures, read any of these workflow documents:
 3. Prefer `fast` mode unless the user specifically needs thorough analysis.
 4. When displaying results, use `annotations` for UI highlighting, `checks` for detailed findings.
 5. The `versionInfo` in responses helps explain why results may differ over time — rules are updated regularly.
+6. Cached responses return instantly at 0 credits — check the `cached` field in responses.
+7. Use `GET /logs?externalId=...` to debug integration issues.
+8. Register webhooks via `POST /webhooks` for async result delivery.
