@@ -11,6 +11,8 @@ agents: dynamic
 capabilities:
   - content-compliance-check
   - image-rights-clearance
+  - multipart-image-upload
+  - tenant-scoping
   - streaming-progressive-results
   - async-webhook-execution
   - individual-agent-invocation
@@ -61,6 +63,38 @@ Response:
 
 If validation fails with 401, ask the user to check their key.
 
+## Onboarding & Tenant Scoping
+
+Every request is scoped to the tenant's subscribed jurisdictions and platforms,
+set during onboarding at `https://developers.zebratruth.ai`. Requests outside
+that scope return 403 BEFORE any credits are spent.
+
+**Allowed values:**
+- Jurisdictions: `us`, `eu`, `uk`, `india`, `china`
+- Platforms: `youtube`, `instagram`, `facebook`, `tiktok`, `linkedin`
+
+**Precedence:** if a request supplies `jurisdictions` / `platforms`, each value
+must be in the tenant's subscription. If omitted, the tenant's defaults apply.
+The engine never silently expands scope beyond what the caller asked for.
+
+**The four 403 shapes — match on `error` field verbatim:**
+
+1. `"Tenant not onboarded. Complete setup at https://developers.zebratruth.ai before using the API."`
+   → Direct user to the dev portal onboarding wizard.
+2. `"Tenant configuration incomplete. Set default jurisdictions and platforms in your dev portal."`
+   → Direct user to `https://developers.zebratruth.ai/dashboard/settings`.
+3. `"Requested jurisdictions [india, china] are not in your subscription. Allowed: [us, eu]."`
+   → Narrow the request OR direct user to update subscription.
+4. `"Requested platforms [tiktok] are not in your subscription. Allowed: [youtube, instagram]."`
+   → Same remediation — narrow request or update subscription.
+
+**Test-mode keys (`zt_test_`) still go through scope enforcement.** A test key
+tied to a non-onboarded tenant will still 403. Sandbox and production behavior
+are deliberately consistent — do not assume test keys skip scope.
+
+See [tenant-onboarding-and-scoping.md](workflows/tenant-onboarding-and-scoping.md)
+for the full workflow.
+
 ## Quick Start: Run a Compliance Check
 
 ```
@@ -98,6 +132,32 @@ Idempotency-Key: {generate-uuid}
 | `webhookUrl` | string | Required for async mode — where to POST results |
 | `callbackId` | string | Your correlation ID, echoed back in response |
 | `externalId` | string | Your own reference ID, queryable in logs |
+
+### Multipart Upload (image binaries)
+
+When the user has an image file locally and can't host it at a public URL, use
+`multipart/form-data` instead of JSON. Works on both `/v1/compliance/check`
+(text + image) and `/v1/compliance/check-image` (image-only). Sync-only —
+streaming and webhook modes are JSON-path only.
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -F "text=Ariana Grande wears the new Nike sneakers..." \
+  -F "image=@./ad.png" \
+  -F "jurisdictions=us" -F "jurisdictions=eu" \
+  -F "platforms=youtube" \
+  -F "mode=fast"
+```
+
+**Rules:** flat fields only — repeat `jurisdictions`, `platforms`, and `image`
+once per value (not comma-separated, not JSON arrays). Up to 2 `image` parts.
+Total body capped at 4.5 MB.
+
+**Cache bypass:** requests with any `image` parts (multipart) or a non-empty
+`imageUrls` array (JSON) skip the response cache and are always billed, because
+the cache is keyed on text only.
 
 ### Response
 
@@ -160,6 +220,32 @@ Idempotency-Key: {generate-uuid}
 - **medium** — Potential issue. Review recommended.
 - **low** — Minor concern. Optional fix.
 - **info** — Informational only.
+
+### Check Statuses in Image Responses
+
+`rights-clearance-image` does NOT map all detections to `block`. Use these
+defaults when presenting results:
+
+- **`block`** — only stock-agency watermarks (Shutterstock, Getty, iStock, etc.) — unlicensed stock imagery is a hard fail
+- **`flag`** — celebrity faces, brand logos, missing C2PA credentials — review required, may be licensed/consented/fair-use
+- **`pass`** — verified C2PA credentials present
+
+Treat `flag` as "human review needed," not "reject."
+
+## Jurisdiction-Aware Citations
+
+Citations on returned checks are composed from the laws relevant to the
+jurisdictions the request asked for — not a fixed legal framework. A celebrity
+detection with `jurisdictions: ["us"]` cites California/NY publicity law; the
+same detection with `jurisdictions: ["eu", "uk"]` cites European personality
+rights and UK passing off. Trademark, copyright, and C2PA regulatory notes
+(EU AI Act Art. 50, California SB 942, China Deep Synthesis Provisions, etc.)
+are similarly scoped.
+
+Practical implication: when surfacing the `citation` field to a user, mention
+which jurisdictions the citations cover (the request's jurisdiction set). When
+a user narrows their jurisdiction list, the citation content shrinks
+proportionally — this is intended.
 
 ## Using Annotations
 
@@ -259,8 +345,9 @@ For detailed step-by-step procedures, read any of these workflow documents:
 
 | Workflow | When to use |
 |----------|-------------|
-| [content-compliance-check.md](workflows/content-compliance-check.md) | Full compliance check with all 3 response modes |
-| [image-rights-clearance.md](workflows/image-rights-clearance.md) | Check images for rights, celebrities, logos |
+| [tenant-onboarding-and-scoping.md](workflows/tenant-onboarding-and-scoping.md) | Onboarding model, 4 × 403 shapes and remediation |
+| [content-compliance-check.md](workflows/content-compliance-check.md) | Full compliance check (JSON + multipart) with all 3 response modes |
+| [image-rights-clearance.md](workflows/image-rights-clearance.md) | Check images for rights, celebrities, logos (JSON + multipart) |
 | [streaming-integration.md](workflows/streaming-integration.md) | Consume SSE stream for progressive results |
 | [async-webhook-execution.md](workflows/async-webhook-execution.md) | Submit-then-poll with webhook callbacks |
 | [individual-agents.md](workflows/individual-agents.md) | Invoke a single agent directly |
@@ -273,10 +360,11 @@ For detailed step-by-step procedures, read any of these workflow documents:
 
 | Status | Meaning | Action |
 |--------|---------|--------|
+| 400 | Invalid request | Check the error message for missing/invalid fields |
 | 401 | Invalid or expired API key | Ask user to check their key |
 | 402 | Insufficient credits | Show `creditsRemaining` and `upgradeUrl` from response. Suggest upgrading. |
+| 403 | Tenant scope denied | Read the `error` field for the exact message. Four shapes — see Onboarding & Tenant Scoping section above for each shape and its remediation. |
 | 429 | Rate limited | Wait for `Retry-After` header seconds, then retry |
-| 400 | Invalid request | Check the error message for missing/invalid fields |
 | 503 | Service paused (maintenance) | Wait and retry later |
 
 ## Complete API Surface
