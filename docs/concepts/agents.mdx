@@ -40,6 +40,23 @@ Each text agent internally runs a 3-stage pipeline:
 | B | GPT-5.2 | Content-specific risk analysis | No |
 | C | claude-opus-4-6 | Structured compliance writing | No |
 
+## Jurisdiction and Platform Scoping
+
+Agents don't reason about "all the law in the world" — each invocation is constrained
+to the specific jurisdictions and platforms the request asks for. This has two effects:
+
+- **Law injection is dynamic.** Each agent pulls only the relevant slice of the
+  [jurisdiction law map](/concepts/jurisdiction-law-map) into its prompt. A request against
+  `["us"]` sees only US law; a request against all 5 jurisdictions sees all 5.
+- **Findings stay in-scope.** An agent given only US law won't volunteer EU-specific
+  issues. Every finding traces back to a law or policy that was in scope for this
+  request. On image-rights findings, this also shows up as per-jurisdiction
+  [citations](/guides/image-rights-clearance#per-jurisdiction-citations).
+
+The set of permitted jurisdictions and platforms is further bounded by your tenant's
+subscription — see [Tenant Onboarding and Scoping](/guides/tenant-onboarding-and-scoping).
+Requesting something outside your subscription returns 403 before any agent runs.
+
 ## Invoking a Single Agent
 
 Call any agent directly via `POST /agents/{agentId}`. Costs ~8-12 credits vs ~47 for a full check.

@@ -9,6 +9,10 @@ Check images for celebrity faces, logos, watermarks, trademarks, and C2PA metada
 
 ## Endpoint
 
+Two request formats are supported.
+
+**JSON** — reference publicly-hosted images by URL:
+
 ```
 POST https://api.zebratruth.ai/v1/compliance/check-image
 Authorization: Bearer {api_key}
@@ -22,12 +26,65 @@ Idempotency-Key: {uuid}
 }
 ```
 
+**Multipart** — upload image binaries directly (use when you don't have a public URL):
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check-image \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -F "image=@./ad-1.png" -F "image=@./ad-2.png" \
+  -F "jurisdictions=us" -F "jurisdictions=eu" \
+  -F "platforms=instagram"
+```
+
+<Note>
+  **Multipart constraints.** Flat fields — repeat `jurisdictions`, `platforms`, and
+  `image` once per value (not comma-separated, not a JSON array). At least one and at
+  most two `image` parts. Total request body capped at 4.5 MB by the platform.
+</Note>
+
 ## What It Checks
 
 1. **C2PA / IPTC metadata** — Content Credentials, provenance, AI generation markers
 2. **Celebrity detection** — Known public figures (AWS Rekognition)
 3. **Logo / watermark detection** — Brand logos, stock photo watermarks (Google Cloud Vision)
 4. **Deterministic risk aggregation** — Combines all detections into compliance checks
+
+## Check Statuses
+
+Not every detection is a hard block. The aggregator maps detections to statuses as follows:
+
+| Detection | Status | Severity | Rationale |
+|-----------|--------|----------|-----------|
+| Stock-agency watermark (Shutterstock, Getty, etc.) | `block` | `critical` | Unlicensed stock imagery — high copyright liability |
+| Celebrity face | `flag` | `high` | Review: the person may be licensed, a paid spokesperson, or consented |
+| Brand logo | `flag` | `medium` | Review: could be nominative fair use, comparative advertising, or authorized |
+| C2PA credentials missing | `flag` | `medium` | Review: required by some jurisdictions/platforms but not universally |
+| AI-generation markers present (non-C2PA) | `flag` | `low` | Review: AI origin detected but C2PA credentials are preferred |
+| C2PA credentials present | `pass` | `info` | Verified, with generator and assertion details |
+
+Treat `flag` as "human review needed," not "reject." Use the `recommendation` field to
+drive the reviewer's next step.
+
+## Per-Jurisdiction Citations
+
+Citations on returned checks are composed from the laws applicable to the jurisdictions
+you requested. Ask for `["us"]` and you get US citations; ask for `["us", "eu", "uk"]`
+and you get a semicolon-joined list covering all three.
+
+**Example — celebrity detection across different jurisdiction sets:**
+
+| Request jurisdictions | Citation on `celebrity-detected` check |
+|-----------------------|----------------------------------------|
+| `["us"]`              | `Cal. Civil Code § 3344; NY Civil Rights Law §§ 50-51; Tennessee ELVIS Act` |
+| `["eu"]`              | `EU member-state image/personality rights (e.g. German Allgemeines Persönlichkeitsrecht, French droit à l'image)` |
+| `["uk"]`              | `UK passing off (common law); Trade Marks Act 1994` |
+| `["us", "eu", "uk"]`  | All three, joined by `; ` |
+
+The same pattern applies to brand logos (trademark law) and stock watermarks
+(copyright law), and to the regulatory notes attached to the "No C2PA credentials"
+check (EU AI Act, California SB 942, China Deep Synthesis Provisions, etc. — only those
+relevant to the jurisdictions and platforms in the request).
 
 ## Response
 
@@ -36,11 +93,12 @@ Idempotency-Key: {uuid}
   "checks": [
     {
       "agentId": "rights-clearance-image",
-      "checkName": "celebrity-detected",
+      "checkName": "Celebrity Detected: Taylor Swift",
       "status": "flag",
       "severity": "high",
-      "message": "Possible public figure detected in image",
-      "recommendation": "Obtain likeness rights or replace the image"
+      "message": "Image contains a recognizable likeness of Taylor Swift (confidence: 94%). Right-of-publicity laws apply in the requested jurisdictions: us, eu.",
+      "recommendation": "Obtain a written talent release/license for commercial use of this person's likeness, or remove/replace the image.",
+      "citation": "Cal. Civil Code § 3344; NY Civil Rights Law §§ 50-51; Tennessee ELVIS Act; EU member-state image/personality rights (e.g. German Allgemeines Persönlichkeitsrecht, French droit à l'image)"
     }
   ],
   "annotations": [
@@ -48,7 +106,7 @@ Idempotency-Key: {uuid}
       "type": "image-region",
       "agentId": "rights-clearance-image",
       "severity": "high",
-      "message": "Possible public figure detected",
+      "message": "Image contains a recognizable likeness of Taylor Swift",
       "imageLocation": {
         "imageUrl": "https://example.com/ad-image.jpg",
         "boundingBox": { "x": 120, "y": 45, "width": 200, "height": 250 }
@@ -64,6 +122,9 @@ Idempotency-Key: {uuid}
 
 ## Notes
 
-- Images must be publicly accessible URLs
-- Maximum 2 images per request (hard cap)
+- JSON path: images must be publicly accessible URLs
+- Multipart path: upload binaries directly, up to 2 per request, 4.5 MB total body
+- Maximum 2 images per request on both paths (hard cap)
+- Requests are scoped to your subscribed jurisdictions and platforms — see
+  [Tenant Onboarding and Scoping](/guides/tenant-onboarding-and-scoping) for the 403 model
 - Results include `image-region` annotations with bounding boxes for detected elements

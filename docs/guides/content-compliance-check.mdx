@@ -10,8 +10,11 @@ Full procedure for running a compliance check in any of the three response modes
 ## Prerequisites
 
 - Valid API key (validated via `GET /whoami`)
+- **Completed onboarding** — your tenant record must have default jurisdictions and
+  platforms set. See the [Tenant Onboarding and Scoping guide](/guides/tenant-onboarding-and-scoping).
+  Requests from a tenant that hasn't onboarded return 403.
 - Content to check (text, optionally images)
-- Known target jurisdictions and platforms
+- Target jurisdictions and platforms — must be a subset of what you subscribed to
 
 ## Procedure
 
@@ -42,6 +45,10 @@ If insufficient, inform the user and suggest upgrading at the `upgradeUrl` in th
 
 ### Step 3: Submit the Check
 
+Two request formats are supported.
+
+**JSON** — canonical format, full feature set (streaming, webhooks, image URLs):
+
 ```
 POST https://api.zebratruth.ai/v1/compliance/check
 Authorization: Bearer {api_key}
@@ -60,6 +67,34 @@ Idempotency-Key: {generate-a-uuid-here}
   "externalId": "my-project-123"
 }
 ```
+
+**Multipart** — use when you need to upload an image binary directly instead of
+referencing a public URL:
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -F "text=The full ad script or content text goes here." \
+  -F "image=@./ad.png" \
+  -F "jurisdictions=us" -F "jurisdictions=eu" \
+  -F "platforms=youtube" -F "platforms=instagram" \
+  -F "mode=fast"
+```
+
+<Note>
+  **Multipart constraints.** Flat fields, repeated for arrays (`-F "jurisdictions=us"
+  -F "jurisdictions=eu"`, not comma-separated). Up to 2 `image` parts. Total request
+  body capped at 4.5 MB. Sync-only — `responseMode`, `webhookUrl`, and `callbackId`
+  are ignored.
+</Note>
+
+<Warning>
+  **Cache bypass with images.** The response cache is keyed on text only, so requests
+  that include any `image` parts (multipart) or a non-empty `imageUrls` array (JSON)
+  skip the cache and are always billed. This avoids serving the wrong image-rights
+  result from a prior request with different images.
+</Warning>
 
 ### Step 4: Handle the Response
 
@@ -85,9 +120,19 @@ If the decision is HOLD or BLOCK:
 
 ## Error Handling
 
-- **402 Payment Required**: Credits exhausted. Response includes `creditsRemaining` and `upgradeUrl`.
-- **429 Too Many Requests**: Rate limited. Wait for `Retry-After` seconds.
 - **400 Bad Request**: Check that `jurisdictions` and `platforms` contain valid IDs.
+- **402 Payment Required**: Credits exhausted. Response includes `creditsRemaining` and `upgradeUrl`.
+- **403 Forbidden** — tenant scope: The request asks for a jurisdiction or platform
+  outside your subscription, or your tenant record is missing / incomplete. The `error`
+  field carries the exact runtime message. Four shapes:
+  - `"Tenant not onboarded. Complete setup at https://developers.zebratruth.ai before using the API."` — no tenant record yet
+  - `"Tenant configuration incomplete. Set default jurisdictions and platforms in your dev portal."` — tenant exists but has empty defaults
+  - `"Requested jurisdictions [india, china] are not in your subscription. Allowed: [us, eu]."`
+  - `"Requested platforms [tiktok] are not in your subscription. Allowed: [youtube, instagram]."`
+
+  Fix by adjusting the request or updating defaults at
+  [developers.zebratruth.ai/dashboard/settings](https://developers.zebratruth.ai/dashboard/settings).
+- **429 Too Many Requests**: Rate limited. Wait for `Retry-After` seconds.
 
 ## Example: Full Flow
 

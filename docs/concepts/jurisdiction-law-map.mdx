@@ -1,0 +1,91 @@
+---
+title: Jurisdiction Law Map
+description: How ZebraTruth agents pull jurisdiction-specific law into each check
+---
+
+# Jurisdiction Law Map
+
+Every compliance check in ZebraTruth is scoped to a specific set of jurisdictions. Rather
+than hardcoding a single legal framework (like US FTC rules) into each agent, the engine
+loads the relevant laws dynamically from a **jurisdiction law map** — a curated index of
+regulations organized by jurisdiction and legal area.
+
+## The Shape of the Map
+
+The map covers 5 jurisdictions and 5 legal areas. Each cell is a list of individual law
+references (name, citation, description).
+
+| | `ai_content` | `advertising` | `rights` | `data_privacy` | `metadata` |
+|-|---|---|---|---|---|
+| **`us`**    | FTC AI rules, CA SB 942, TN ELVIS Act, etc. | FTC Endorsement Guides, Lanham Act, COPPA, TCPA | Right of Publicity (CA/NY/common law), DMCA | COPPA, CCPA/CPRA, state privacy laws | SB 942, C2PA Standard, FTC disclosure |
+| **`eu`**    | EU AI Act, Digital Services Act | UCPD, AVMSD, EU Consumer Rights Directive | Personality rights (per member state), Copyright DSM | GDPR, ePrivacy Directive | AI Act Art. 50, DSA provenance |
+| **`uk`**    | UK AI framework, Online Safety Act | CAP Code, BCAP Code, ASA rulings | Passing off (common law), Trade Marks Act 1994 | UK GDPR, Data Protection Act 2018 | Ofcom guidance, C2PA emerging |
+| **`india`** | IT Rules 2021, MeitY AI Advisory | ASCI Code, Consumer Protection Act 2019 | Puttaswamy privacy right, common-law publicity | DPDP Act 2023 | MeitY Advisory 2024 |
+| **`china`** | Deep Synthesis Provisions, Generative AI Measures | Advertising Law, Anti-Unfair Competition Law | Civil Code Arts. 990–1023 (personality/portrait) | PIPL, DSL | Deep Synthesis Provisions Arts. 7–8 |
+
+The full content of each cell lives in
+`server/utils/compliance/agents/jurisdiction-laws.ts` in the ZebraTruth engine — it's
+a structured `Record<jurisdictionId, JurisdictionLaws>` consulted at runtime.
+
+## How Agents Use It
+
+When a request comes in with `jurisdictions: ["us", "eu"]`, the engine:
+
+1. **Loads** the `us` and `eu` entries from the map
+2. **Extracts** only the areas each agent cares about (e.g., the Advertising Law agent
+   pulls `advertising`; the Rights Clearance agent pulls `rights`)
+3. **Injects** those law references into the agent's prompt as structured context
+4. **Discards** everything else — agents never see law from jurisdictions that weren't
+   requested
+
+This means two things for the caller:
+
+- **Smaller, faster prompts** when you narrow the jurisdiction list. A request against
+  `["us"]` only injects US law; a request against all 5 jurisdictions injects all 5.
+- **Narrower findings**. An agent given only US law will not volunteer EU-specific
+  issues (and vice versa) — every finding traces back to a law that was actually in
+  scope for this request.
+
+## How It Shows Up in Responses
+
+On findings returned by the Image Rights Clearance agent, the `citation` field is a
+semicolon-joined list of per-jurisdiction references composed from the map. For example,
+a celebrity detection with `jurisdictions: ["us", "uk"]` returns:
+
+```
+Cal. Civil Code § 3344; NY Civil Rights Law §§ 50-51; Tennessee ELVIS Act; UK passing off (common law); Trade Marks Act 1994
+```
+
+Swap the jurisdictions and you'll see a different citation string — same detection,
+different legal frame. See the [Image Rights Clearance guide](/guides/image-rights-clearance)
+for the full per-jurisdiction citation matrix.
+
+Text agents operate the same way internally — each finding is grounded in a specific
+jurisdiction's law from the map — though they expose the citation differently (one
+citation per check, tied to the most specific law that triggered the flag).
+
+## Why This Design
+
+The earlier version of the engine hardcoded FTC references into the advertising agent
+and EU AI Act references into the AI-content agent. That produced two bad outcomes:
+
+1. **US bias in non-US checks** — a UK-scoped request still saw FTC citations
+2. **Missing coverage when new jurisdictions were added** — onboarding India, for
+   example, meant editing every agent
+
+The map reverses this: agents are generic, jurisdictions are data. Adding a new
+jurisdiction is a table-insert, not a code change.
+
+## Keeping the Map Current
+
+The map is versioned in-engine and the timestamp of the last update is surfaced as
+`rulesVersion` on every compliance report. If you pin integration tests to expected
+citations, track `rulesVersion` — when it changes, re-baseline.
+
+## See Also
+
+- [Compliance Agents](/concepts/agents) — how each agent consumes its slice of the map
+- [Compliance Pipeline](/concepts/compliance-pipeline) — where the map lookup sits in the
+  overall flow
+- [Tenant Onboarding and Scoping](/guides/tenant-onboarding-and-scoping) — your
+  subscription constrains which jurisdictions you can request

@@ -1,0 +1,154 @@
+---
+title: Tenant Onboarding and Scoping
+description: How your subscription determines which jurisdictions and platforms you can check
+---
+
+# Tenant Onboarding and Scoping
+
+Every API request is scoped to the jurisdictions and platforms you subscribed to during
+onboarding. This guide explains the model, the errors you'll hit if you fall outside it,
+and how to change your defaults.
+
+## Why Scoping Exists
+
+Compliance checks are not free to compute and the law surface is not infinite. Your account
+carries a **subscription** of specific jurisdictions and platforms. Requests must stay within
+that set. This:
+
+- Keeps costs predictable — you aren't billed for running checks against regions you don't ship to
+- Makes results meaningful — the rules engine doesn't waste cycles on irrelevant law
+- Creates a single source of truth for which content domains your account is operating in
+
+## The Onboarding Step
+
+After creating an API key at [developers.zebratruth.ai](https://developers.zebratruth.ai),
+complete the onboarding flow to set your defaults:
+
+| Field | Values |
+|-------|--------|
+| **Default jurisdictions** | One or more of: `us`, `eu`, `uk`, `india`, `china` |
+| **Default platforms**     | One or more of: `youtube`, `instagram`, `facebook`, `tiktok`, `linkedin` |
+| **Default mode**          | `fast` (all agents in parallel, ~12 credits) or `full` (4-phase pipeline, ~47 credits) |
+
+These become the defaults for every request. If a request omits `jurisdictions` or
+`platforms`, the defaults are used. If a request supplies them, each value must be in
+your subscribed set.
+
+## Request Behavior
+
+```bash
+# Omitting jurisdictions/platforms — uses your defaults
+curl -X POST https://api.zebratruth.ai/v1/compliance/check \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -d '{
+    "content": { "text": "..." },
+    "mode": "fast"
+  }'
+
+# Narrowing — subset of your defaults, allowed
+curl -X POST https://api.zebratruth.ai/v1/compliance/check \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -d '{
+    "jurisdictions": ["us"],
+    "platforms": ["youtube"],
+    "content": { "text": "..." },
+    "mode": "fast"
+  }'
+
+# Expanding — any value outside your subscription returns 403
+```
+
+The precedence is always: **request value wins if present, otherwise tenant default**.
+The engine never silently expands a request to include jurisdictions or platforms you
+didn't explicitly ask for.
+
+## The 403 Responses
+
+Four distinct 403s can come back from the scope enforcer. The `error` field carries
+the exact runtime message so your client code can pattern-match on it.
+
+### 1. Tenant not onboarded
+
+```json
+{
+  "error": "Tenant not onboarded. Complete setup at https://developers.zebratruth.ai before using the API."
+}
+```
+
+Your API key is valid but no tenant record exists yet. Visit
+[developers.zebratruth.ai](https://developers.zebratruth.ai) and complete the onboarding
+wizard.
+
+### 2. Tenant configuration incomplete
+
+```json
+{
+  "error": "Tenant configuration incomplete. Set default jurisdictions and platforms in your dev portal."
+}
+```
+
+A tenant record exists but the default jurisdictions or platforms array is empty. This
+usually only happens if a tenant was created out-of-band. Fix at
+[developers.zebratruth.ai/dashboard/settings](https://developers.zebratruth.ai/dashboard/settings).
+
+### 3. Jurisdiction not in subscription
+
+```json
+{
+  "error": "Requested jurisdictions [india, china] are not in your subscription. Allowed: [us, eu]."
+}
+```
+
+Either drop the denied jurisdictions from the request, or add them to your account at
+[developers.zebratruth.ai/dashboard/settings](https://developers.zebratruth.ai/dashboard/settings).
+
+### 4. Platform not in subscription
+
+```json
+{
+  "error": "Requested platforms [tiktok] are not in your subscription. Allowed: [youtube, instagram]."
+}
+```
+
+Same remediation — narrow the request or widen the subscription.
+
+## Endpoints That Enforce Scope
+
+All v1 API-key endpoints enforce scope before any compute starts, so 403s are cheap
+(no credits consumed):
+
+- `POST /v1/compliance/check`
+- `POST /v1/compliance/check-image`
+- `POST /v1/agents/{agentId}`
+- `POST /v1/reports/{reportId}/replay` (enforced against the caller's **current**
+  subscription, not the subscription at the time of the original report — if access to
+  a jurisdiction was dropped since the original run, replay returns 403)
+
+## Changing Your Subscription
+
+Update your defaults at any time:
+
+1. Go to [developers.zebratruth.ai/dashboard/settings](https://developers.zebratruth.ai/dashboard/settings)
+2. Toggle jurisdictions and platforms
+3. Changes are live within seconds — the next API request uses the new set
+
+## Test-Mode Keys
+
+Keys starting with `zt_test_` bypass the credit system but **still go through scope
+enforcement**. A test key tied to a tenant with no onboarding data will still return
+403. This keeps sandbox and production behavior consistent.
+
+## FAQ
+
+**Does a subset request get cheaper results?** Usually yes — fewer jurisdictions means
+less law-map content injected into each agent prompt, and fewer per-jurisdiction
+citations on each finding. For short content, narrowing from `["us", "eu"]` to `["us"]`
+measurably reduces response size.
+
+**Can I expand to all jurisdictions?** Yes — subscribe to all 5 in the dashboard.
+There's no API-level way to request an expansion, by design.
+
+**What happens during the onboarding wizard itself?** The dev portal's
+`/api/settings` endpoint writes your defaults to the unified Tenants table. The
+compliance API reads from that same table — there's a single source of truth for both
+surfaces.

@@ -36,7 +36,22 @@ curl https://api.zebratruth.ai/v1/whoami \
 }
 ```
 
-## 3. Run a Compliance Check
+## 3. Complete Onboarding (Required)
+
+Every compliance request is scoped to the **jurisdictions** and **platforms** you
+subscribed to during onboarding. If you skip this step, the API returns 403 with
+the message:
+
+> `Tenant not onboarded. Complete setup at https://developers.zebratruth.ai before using the API.`
+
+Complete onboarding at [developers.zebratruth.ai](https://developers.zebratruth.ai) —
+pick your default jurisdictions (from `us`, `eu`, `uk`, `india`, `china`) and
+platforms (from `youtube`, `instagram`, `facebook`, `tiktok`, `linkedin`). You can
+update these later from the dashboard. See the
+[Tenant Onboarding and Scoping guide](/guides/tenant-onboarding-and-scoping)
+for the full model.
+
+## 4. Run a Compliance Check
 
 ```bash
 curl -X POST https://api.zebratruth.ai/v1/compliance/check \
@@ -54,7 +69,25 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check \
   }'
 ```
 
-## 4. Read the Results
+<Note>
+  **Uploading an image binary instead of a URL?** Use `multipart/form-data`:
+
+  ```bash
+  curl -X POST https://api.zebratruth.ai/v1/compliance/check \
+    -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+    -H "Idempotency-Key: $(uuidgen)" \
+    -F "text=Try our guaranteed weight loss solution!" \
+    -F "image=@./ad.png" \
+    -F "jurisdictions=us" -F "jurisdictions=eu" \
+    -F "platforms=youtube" -F "platforms=instagram" \
+    -F "mode=fast"
+  ```
+
+  Repeat `jurisdictions`, `platforms`, and `image` for each value (up to 2 images,
+  4.5 MB total body). Multipart is sync-only — no streaming or webhooks.
+</Note>
+
+## 5. Read the Results
 
 ```json Response
 {

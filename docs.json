@@ -48,6 +48,7 @@
       "pages": [
         "docs/concepts/agents",
         "docs/concepts/compliance-pipeline",
+        "docs/concepts/jurisdiction-law-map",
         "docs/concepts/annotations",
         "docs/concepts/scoring",
         "docs/concepts/credits-and-billing",
@@ -57,6 +58,7 @@
     {
       "group": "Guides",
       "pages": [
+        "docs/guides/tenant-onboarding-and-scoping",
         "docs/guides/content-compliance-check",
         "docs/guides/image-rights-clearance",
         "docs/guides/streaming-integration",
