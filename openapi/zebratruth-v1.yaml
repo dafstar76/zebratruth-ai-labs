@@ -658,10 +658,20 @@ components:
         - advertising-law
         - platform-policy
         - metadata-labeling
+        - rights-clearance
         - rights-clearance-text
         - rights-clearance-image
         - compliance-score
-      description: Agent identifier. Use `GET /agents` to discover all available agents dynamically.
+      description: |
+        Agent identifier. Use `GET /agents` to discover all available agents dynamically.
+
+        **Note on rights-clearance variants.** `GET /agents` exposes two registered agents
+        for rights clearance: `rights-clearance-text` and `rights-clearance-image` — invoke
+        them via `POST /agents/{agentId}` using those qualified IDs. On **check response
+        objects**, however, text rights-clearance findings carry the bare `agentId:
+        "rights-clearance"`. Treat bare `rights-clearance` and `rights-clearance-text` as
+        the same logical pipeline — the bare form is the value that appears on `checks[]`
+        entries from that agent.
 
     AnnotationType:
       type: string
