@@ -65,7 +65,7 @@ Every response includes `costBreakdown`:
 - `cached: true` — Research stage used cache (0 provider cost)
 - Stage A = legal research (Perplexity, cacheable)
 - Stage B = law interpretation (GPT-5.2)
-- Stage C = compliance writing (claude-opus-4-6)
+- Stage C = compliance writing (claude-sonnet-4-6)
 
 ## Handling 402 (Insufficient Credits)
 

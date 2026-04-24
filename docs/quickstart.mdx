@@ -28,13 +28,18 @@ curl https://api.zebratruth.ai/v1/whoami \
 
 ```json Response
 {
-  "tenantId": "tenant_abc",
-  "tier": "starter",
-  "creditsRemaining": 1420,
-  "creditsTotal": 1665,
-  "rateLimitPerMinute": 60
+  "tenantId": "kp_a269d9695f734329a216669410731a21",
+  "tier": "free",
+  "authType": "apikey",
+  "scopes": ["compliance:check", "agents:*", "reports:read", "policies:read"],
+  "rateLimit": 10
 }
 ```
+
+<Note>
+  Credit balance isn't on `/whoami` — it comes from `GET /v1/usage`. That keeps `/whoami`
+  cheap for frequent auth-validation polling.
+</Note>
 
 ## 3. Complete Onboarding (Required)
 

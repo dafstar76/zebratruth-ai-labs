@@ -53,13 +53,16 @@ Authorization: Bearer {api_key}
 Response:
 ```json
 {
-  "tenantId": "tenant_abc",
-  "tier": "starter",
-  "creditsRemaining": 1420,
-  "creditsTotal": 1665,
-  "rateLimitPerMinute": 60
+  "tenantId": "kp_a269d9695f734329a216669410731a21",
+  "tier": "free",
+  "authType": "apikey",
+  "scopes": ["compliance:check", "agents:*", "reports:read", "policies:read"],
+  "rateLimit": 10
 }
 ```
+
+Credit balance is NOT on `/whoami` — use `GET /v1/usage` for that. `/whoami`
+returns auth/identity only (tenantId, tier, authType, scopes, rateLimit).
 
 If validation fails with 401, ask the user to check their key.
 
@@ -194,7 +197,7 @@ the cache is keyed on text only.
     "engineVersion": "1.0.0",
     "rulesVersion": "2026-04-17",
     "agentVersions": { "advertising-law": "1.1.0", "jurisdiction-detection": "1.2.0" },
-    "modelVersions": { "perplexity/sonar-pro": "sonar-pro-2026", "claude-opus-4-6": "claude-opus-4-6" }
+    "modelVersions": { "perplexity/sonar-pro": "sonar-pro-2026", "claude-sonnet-4-6": "claude-sonnet-4-6" }
   },
   "cached": false,
   "creditsCharged": 12,

@@ -549,8 +549,9 @@ components:
     TenantScopeDenied:
       description: |
         The request asks for a jurisdiction or platform not in your subscription, or your
-        tenant record is missing / incomplete. The `error` field carries the exact runtime
-        message so client code and humans can act on it. Four shapes are possible:
+        tenant record is missing / incomplete. The human-readable reason is in the
+        `statusMessage` and `message` fields (both carry the same string — `message` is
+        the canonical field in the Nitro/h3 error envelope). Four possible messages:
 
         - **Not onboarded** — no tenant record exists yet.
           `"Tenant not onboarded. Complete setup at https://developers.zebratruth.ai before using the API."`
@@ -567,9 +568,28 @@ components:
         application/json:
           schema:
             type: object
+            description: Standard Nitro/h3 error envelope. Read `message` (or `statusMessage`) for the human-readable reason.
+            required: [statusCode, message]
             properties:
               error:
+                type: boolean
+                description: Always `true` for error responses in the Nitro envelope.
+                example: true
+              url:
                 type: string
+                format: uri
+                description: The URL that was requested.
+                example: https://api.zebratruth.ai/v1/compliance/check
+              statusCode:
+                type: integer
+                example: 403
+              statusMessage:
+                type: string
+                description: Human-readable reason — same content as `message`.
+                example: "Requested jurisdictions [india, china] are not in your subscription. Allowed: [us, eu]."
+              message:
+                type: string
+                description: Canonical human-readable reason — pattern-match on this field in client code.
                 example: "Requested jurisdictions [india, china] are not in your subscription. Allowed: [us, eu]."
     RateLimited:
       description: Too many requests
@@ -826,20 +846,26 @@ components:
       properties:
         tenantId:
           type: string
-          example: tenant_abc
+          example: kp_a269d9695f734329a216669410731a21
         tier:
           type: string
           enum: [free, starter, pro, enterprise]
-          example: starter
-        creditsRemaining:
-          type: number
-          example: 1420
-        creditsTotal:
-          type: number
-          example: 1665
-        rateLimitPerMinute:
+          example: free
+        authType:
+          type: string
+          enum: [apikey, kinde, admin]
+          description: How this caller authenticated. External API consumers always see `apikey`.
+          example: apikey
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Scopes granted to this API key. `*` is a wildcard. Common values — `compliance:check`, `agents:*`, `reports:read`, `policies:read`, `webhooks:manage`, `logs:read`, `usage:read`.
+          example: ["compliance:check", "agents:*", "reports:read", "policies:read"]
+        rateLimit:
           type: integer
-          example: 60
+          description: Requests per minute allowed for this key on the current tier.
+          example: 10
 
     UsageResponse:
       type: object
@@ -984,7 +1010,7 @@ components:
           example:
             perplexity/sonar-pro: "sonar-pro-2026"
             gpt-5.2: "gpt-5.2-2026"
-            claude-opus-4-6: "claude-opus-4-6"
+            claude-sonnet-4-6: "claude-sonnet-4-6"
 
     AgentCostEntry:
       type: object
@@ -998,7 +1024,7 @@ components:
           description: |
             - A: Legal research (Perplexity, cacheable)
             - B: Law interpretation (GPT-5.2)
-            - C: Compliance writing (claude-opus-4-6)
+            - C: Compliance writing (claude-sonnet-4-6)
         model:
           type: string
           example: perplexity/sonar-pro
