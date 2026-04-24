@@ -82,6 +82,11 @@ paths:
         directly from a local file system). The multipart form is sync-only and bypasses the
         response cache (cache is keyed on text, so mixing image sets would return wrong results).
 
+        **Latency.** Sync checks typically complete in **15–120 seconds** depending on mode, number
+        of jurisdictions/platforms, and content length. Cached hits return in ≤1s. **Set client
+        timeouts to at least 2.5 minutes (150s).** For long-running or batched workflows, prefer
+        `responseMode: "async"` with a webhook to avoid long-held connections.
+
         **Tenant scoping.** Every request is scoped to your account's subscribed jurisdictions
         and platforms (set during onboarding at `https://developers.zebratruth.ai`). Requesting
         a jurisdiction or platform outside that set returns 403. See the

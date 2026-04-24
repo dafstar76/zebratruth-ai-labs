@@ -112,6 +112,21 @@ If the decision is HOLD or BLOCK:
 2. Re-submit with the updated content (use a NEW `Idempotency-Key`)
 3. Repeat until the decision is PUBLISH
 
+## Latency & Timeouts
+
+Sync compliance checks typically complete in **15–120 seconds**. Variables that affect latency:
+- Mode: `fast` runs agents in parallel (shorter); `full` is a 4-phase pipeline (longer)
+- Number of jurisdictions + platforms (more scope = larger prompts per agent)
+- Content length
+- Cache hits — identical requests return in ≤1s at 0 credits
+
+**Set client timeouts to at least 150 seconds (2.5 minutes).** Below 2 minutes and you'll
+occasionally cut healthy requests on longer runs.
+
+If your workflow can't block for 90+ seconds (UI thread, batch pipeline), use
+`responseMode: "async"` — the API returns a `jobId` immediately and delivers results via
+webhook. See [async-webhook-execution.md](async-webhook-execution.md).
+
 ## Error Handling
 
 - **400 Bad Request**: Check that `jurisdictions` and `platforms` contain valid IDs.

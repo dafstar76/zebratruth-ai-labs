@@ -397,8 +397,9 @@ For detailed step-by-step procedures, read any of these workflow documents:
 1. Always include `Idempotency-Key` header on POST requests to prevent duplicate charges.
 2. Always check `GET /usage` before running multiple checks in a batch.
 3. Prefer `fast` mode unless the user specifically needs thorough analysis.
-4. When displaying results, use `annotations` for UI highlighting, `checks` for detailed findings.
-5. The `versionInfo` in responses helps explain why results may differ over time — rules are updated regularly.
-6. Cached responses return instantly at 0 credits — check the `cached` field in responses.
-7. Use `GET /logs?externalId=...` to debug integration issues.
-8. Register webhooks via `POST /webhooks` for async result delivery.
+4. Sync `/compliance/check` calls typically take 15–120s. Set client timeouts to at least **150 seconds (2.5 min)**. For workflows that can't block that long, use `responseMode: "async"` with a webhook.
+5. When displaying results, use `annotations` for UI highlighting, `checks` for detailed findings.
+6. The `versionInfo` in responses helps explain why results may differ over time — rules are updated regularly.
+7. Cached responses return instantly at 0 credits — check the `cached` field in responses.
+8. Use `GET /logs?externalId=...` to debug integration issues.
+9. Register webhooks via `POST /webhooks` for async result delivery.
