@@ -53,8 +53,6 @@ Authorization: Bearer {api_key}
     "inputTokens": 500,
     "outputTokens": 800,
     "maxTokensBudget": 1200,
-    "model": "perplexity/sonar-pro",
-    "costUSD": 0.014,
     "credits": 2,
     "cached": false,
     "annotationCount": 0,

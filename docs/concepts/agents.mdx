@@ -30,15 +30,24 @@ In **full mode**, agents run in 4 sequential phases with content enrichment:
 
 In **fast mode**, all agents run in parallel without enrichment.
 
-## 3-Model Sub-Agent Pipeline
+## 3-Stage Sub-Agent Pipeline
 
-Each text agent internally runs a 3-stage pipeline:
+Each text agent internally runs a 3-stage pipeline. The stages are semantic roles
+rather than specific providers — the underlying models may change over time, and
+that's fine: the `stackVersion` field in every response captures the current
+stack identity opaquely, so clients can detect changes without knowing what's
+inside.
 
-| Stage | Model | Role | Cacheable |
-|-------|-------|------|-----------|
-| A | Perplexity Pro | Legal research & citations | Yes (30-day TTL) |
-| B | GPT-5.2 | Content-specific risk analysis | No |
-| C | claude-sonnet-4-6 | Structured compliance writing | No |
+| Stage | Role | Cacheable |
+|-------|------|-----------|
+| A | Legal research & citation retrieval | Yes (30-day TTL) |
+| B | Content-specific risk interpretation | No |
+| C | Structured compliance composition | No |
+
+Stage A is cached aggressively because legal research is a pure function of the
+jurisdictions and query topics in scope — same inputs always yield the same
+citations. Stages B and C depend on the actual content being checked, so they
+always run fresh.
 
 ## Jurisdiction and Platform Scoping
 

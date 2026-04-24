@@ -124,7 +124,7 @@ Sync compliance checks typically complete in **15–120 seconds**, depending on:
 - Execution mode (`fast` is parallel across agents; `full` is a 4-phase pipeline and runs longer)
 - Number of jurisdictions and platforms in scope (more = more legal context injected into each agent prompt)
 - Content length (longer text = more tokens per agent)
-- Whether research-stage caches hit (Perplexity Stage A is cached with a 30-day TTL; identical
+- Whether research-stage caches hit (Stage A is cached with a 30-day TTL; identical
   topic queries return in milliseconds)
 
 Cached full-result hits (identical `content.text + jurisdictions + platforms + mode`) return

@@ -74,11 +74,15 @@ The `agentSummaries` field provides a high-level view per agent:
   "engineVersion": "1.3.2",
   "rulesVersion": "2026-04-01",
   "agentVersions": { "advertising-law": "1.1.0", ... },
-  "modelVersions": { "perplexity/sonar-pro": "sonar-pro-2026", ... }
+  "stackVersion": "2026.04-a7f3"
 }
 ```
 
-Use this to explain why results may change over time. Rules are updated when platform policies or laws change.
+Use this to explain why results may change over time. `rulesVersion` bumps when
+the compiled law set changes; `agentVersions` bumps when an agent's logic
+changes; `stackVersion` is an opaque identifier for the underlying
+model/prompt pipeline. Treat `stackVersion` as a black-box string and compare
+only for equality — do not parse its structure.
 
 ## Cost Breakdown
 
@@ -86,8 +90,8 @@ Use this to explain why results may change over time. Rules are updated when pla
 {
   "totalCredits": 47,
   "agents": [
-    { "agent": "jurisdiction", "stage": "A", "model": "perplexity/sonar-pro", "credits": 2, "cached": true },
-    { "agent": "jurisdiction", "stage": "B", "model": "gpt-5.2", "credits": 3 },
+    { "agent": "jurisdiction", "stage": "A", "credits": 2, "cached": true },
+    { "agent": "jurisdiction", "stage": "B", "credits": 3 },
     ...
   ]
 }

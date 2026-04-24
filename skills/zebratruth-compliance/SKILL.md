@@ -197,7 +197,7 @@ the cache is keyed on text only.
     "engineVersion": "1.0.0",
     "rulesVersion": "2026-04-17",
     "agentVersions": { "advertising-law": "1.1.0", "jurisdiction-detection": "1.2.0" },
-    "modelVersions": { "perplexity/sonar-pro": "sonar-pro-2026", "claude-sonnet-4-6": "claude-sonnet-4-6" }
+    "stackVersion": "2026.04-a7f3"
   },
   "cached": false,
   "creditsCharged": 12,

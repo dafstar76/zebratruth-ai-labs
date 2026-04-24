@@ -999,23 +999,25 @@ components:
           example: "1.3.2"
         rulesVersion:
           type: string
-          description: Timestamp of last rules update
+          description: Timestamp of last rules update. Bumps when the compiled law set changes.
           example: "2026-04-01"
         agentVersions:
           type: object
           additionalProperties:
             type: string
+          description: Version per compliance agent. Bumps when an agent's logic changes.
           example:
             advertising-law: "1.1.0"
             jurisdiction-detection: "1.2.0"
-        modelVersions:
-          type: object
-          additionalProperties:
-            type: string
-          example:
-            perplexity/sonar-pro: "sonar-pro-2026"
-            gpt-5.2: "gpt-5.2-2026"
-            claude-sonnet-4-6: "claude-sonnet-4-6"
+        stackVersion:
+          type: string
+          description: |
+            Opaque identifier for the internal model/prompt stack. Bumps whenever the
+            underlying model pipeline changes. Use it for client-side change detection
+            (e.g. invalidate cached results, trigger replays). The format is intentionally
+            opaque — treat it as a black-box string and pattern-match only for equality,
+            never parse its structure.
+          example: "2026.04-a7f3"
 
     AgentCostEntry:
       type: object
@@ -1027,12 +1029,10 @@ components:
           type: string
           enum: [A, B, C]
           description: |
-            - A: Legal research (Perplexity, cacheable)
-            - B: Law interpretation (GPT-5.2)
-            - C: Compliance writing (claude-sonnet-4-6)
-        model:
-          type: string
-          example: perplexity/sonar-pro
+            Pipeline stage — the agent's work is decomposed into three sub-steps:
+            - **A** — Legal research (retrieves applicable law; cacheable with a 30-day TTL)
+            - **B** — Risk interpretation (maps law to content-specific risk)
+            - **C** — Compliance composition (writes structured output)
         credits:
           type: number
           example: 2
@@ -1261,12 +1261,6 @@ components:
           type: integer
           description: Token budget allocated to this agent
           example: 1200
-        model:
-          type: string
-          example: perplexity/sonar-pro
-        costUSD:
-          type: number
-          example: 0.014
         credits:
           type: number
           example: 2
