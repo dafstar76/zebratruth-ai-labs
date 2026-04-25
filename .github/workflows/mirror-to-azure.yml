@@ -1,0 +1,27 @@
+name: Mirror to Azure DevOps
+
+  on:
+    push:
+    workflow_dispatch:
+
+  concurrency:
+    group: mirror-to-azure
+    cancel-in-progress: false
+
+  jobs:
+    mirror:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Mirror clone from GitHub
+          run: |
+            git clone --mirror \
+              "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+              source.git
+
+        - name: Push --mirror to Azure DevOps
+          working-directory: source.git
+          env:
+            AZ_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+          run: |
+            git push --mirror \
+  "https://x:${AZ_PAT}@dev.azure.com/zebratruth/ZebraTruth%20AI/_git/zebratruth-ai-labs"
