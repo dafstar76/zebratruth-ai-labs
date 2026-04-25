@@ -509,48 +509,102 @@ components:
 
   responses:
     Unauthorized:
-      description: Invalid or expired API key
+      description: |
+        Invalid, missing, or expired API key. Standard Nitro/h3 error envelope —
+        read `message` for the human-readable reason.
       content:
         application/json:
           schema:
             type: object
+            description: Standard Nitro/h3 error envelope.
+            required: [statusCode, message]
             properties:
               error:
-                type: string
-                example: Invalid API key
-    BadRequest:
-      description: Invalid request body
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              details:
-                type: array
-                items:
-                  type: string
-    InsufficientCredits:
-      description: Not enough credits to process this request
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-                example: Insufficient credits
-              creditsRemaining:
-                type: number
-                example: 3
-              creditsNeeded:
-                type: number
-                example: 47
-              upgradeUrl:
+                type: boolean
+                example: true
+              url:
                 type: string
                 format: uri
-                example: https://developers.zebratruth.ai/billing/upgrade
+                example: https://api.zebratruth.ai/v1/whoami
+              statusCode:
+                type: integer
+                example: 401
+              statusMessage:
+                type: string
+                example: "Invalid API key"
+              message:
+                type: string
+                description: Canonical human-readable reason — pattern-match on this field.
+                example: "Invalid API key"
+    BadRequest:
+      description: |
+        Request body failed validation. Standard Nitro/h3 error envelope. The
+        `message` field describes what's wrong (typically a Zod validation error
+        message listing the offending fields).
+      content:
+        application/json:
+          schema:
+            type: object
+            description: Standard Nitro/h3 error envelope.
+            required: [statusCode, message]
+            properties:
+              error:
+                type: boolean
+                example: true
+              url:
+                type: string
+                format: uri
+              statusCode:
+                type: integer
+                example: 400
+              statusMessage:
+                type: string
+                example: 'jurisdictions: Required, platforms: Required'
+              message:
+                type: string
+                description: Canonical human-readable reason. For Zod failures, lists each invalid field.
+                example: 'jurisdictions: Required, platforms: Required'
+    InsufficientCredits:
+      description: |
+        Not enough credits in the tenant's current period to process this request.
+        Standard Nitro/h3 error envelope plus a `data` object with credit specifics
+        and an upgrade URL.
+      content:
+        application/json:
+          schema:
+            type: object
+            description: Standard Nitro/h3 error envelope with a `data` payload.
+            required: [statusCode, message]
+            properties:
+              error:
+                type: boolean
+                example: true
+              url:
+                type: string
+                format: uri
+              statusCode:
+                type: integer
+                example: 402
+              statusMessage:
+                type: string
+                example: "Insufficient credits"
+              message:
+                type: string
+                example: "Insufficient credits"
+              data:
+                type: object
+                description: Per-error context, attached via Nitro `createError({ data: ... })`.
+                properties:
+                  creditsRemaining:
+                    type: number
+                    example: 3
+                  creditsNeeded:
+                    type: number
+                    example: 47
+                  upgradeUrl:
+                    type: string
+                    format: uri
+                    example: https://developers.zebratruth.ai/dashboard/billing
     TenantScopeDenied:
       description: |
         The request asks for a jurisdiction or platform not in your subscription, or your
@@ -597,29 +651,53 @@ components:
                 description: Canonical human-readable reason — pattern-match on this field in client code.
                 example: "Requested jurisdictions [india, china] are not in your subscription. Allowed: [us, eu]."
     RateLimited:
-      description: Too many requests
+      description: |
+        Per-tenant rate limit exceeded. Read the `Retry-After` header for the
+        wait duration. Body is the standard Nitro/h3 error envelope plus a
+        `data` object with limit context.
       headers:
         Retry-After:
           schema:
             type: integer
-          description: Seconds to wait before retrying
+          description: Seconds to wait before retrying.
       content:
         application/json:
           schema:
             type: object
+            description: Standard Nitro/h3 error envelope with a `data` payload.
+            required: [statusCode, message]
             properties:
               error:
+                type: boolean
+                example: true
+              url:
                 type: string
-                example: Rate limit exceeded
-              retryAfter:
+                format: uri
+              statusCode:
                 type: integer
-                example: 5
-              limit:
-                type: integer
-                example: 60
-              remaining:
-                type: integer
-                example: 0
+                example: 429
+              statusMessage:
+                type: string
+                example: "Rate limit exceeded"
+              message:
+                type: string
+                example: "Rate limit exceeded"
+              data:
+                type: object
+                description: Per-error context, attached via Nitro `createError({ data: ... })`.
+                properties:
+                  retryAfter:
+                    type: integer
+                    description: Mirrors the `Retry-After` header for clients that prefer body fields.
+                    example: 5
+                  limit:
+                    type: integer
+                    description: Tenant's requests-per-minute cap.
+                    example: 60
+                  remaining:
+                    type: integer
+                    description: Requests remaining in the current window.
+                    example: 0
 
   schemas:
     # --- Enums ---
