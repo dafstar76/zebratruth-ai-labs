@@ -17,6 +17,9 @@ jobs:
             git clone --mirror \
               "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
               source.git
+            # Strip GitHub PR refs — Azure DevOps rejects pushes to refs/pull/*
+            git -C source.git for-each-ref --format='%(refname)' refs/pull \
+              | xargs -r -n1 git -C source.git update-ref -d
 
         - name: Push --mirror to Azure DevOps
           working-directory: source.git
@@ -24,4 +27,4 @@ jobs:
             AZ_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
           run: |
             git push --mirror \
-  "https://x:${AZ_PAT}@dev.azure.com/zebratruth/ZebraTruth%20AI/_git/zebratruth-ai-labs"
+              "https://x:${AZ_PAT}@dev.azure.com/zebratruth/ZebraTruth%20AI/_git/zebratruth-ai-labs"
