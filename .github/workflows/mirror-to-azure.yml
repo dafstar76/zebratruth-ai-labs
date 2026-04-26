@@ -1,14 +1,14 @@
 name: Mirror to Azure DevOps
 
-  on:
+on:
     push:
     workflow_dispatch:
 
-  concurrency:
+concurrency:
     group: mirror-to-azure
     cancel-in-progress: false
 
-  jobs:
+jobs:
     mirror:
       runs-on: ubuntu-latest
       steps:
