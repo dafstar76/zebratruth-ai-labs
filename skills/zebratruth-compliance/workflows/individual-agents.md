@@ -13,12 +13,12 @@ Authorization: Bearer {api_key}
 ```json
 [
   {
-    "id": "jurisdiction-detection",
-    "name": "Jurisdiction Detection",
-    "description": "Detects applicable laws and regulations",
+    "id": "ai-laws",
+    "name": "AI Laws",
+    "description": "Checks AI-content laws (disclosure, watermarking, transparency) for the requested jurisdictions",
     "phase": 1,
     "inputType": "text",
-    "version": "1.2.0"
+    "version": "1.3.0"
   },
   {
     "id": "advertising-law",

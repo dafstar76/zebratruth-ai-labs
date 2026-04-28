@@ -196,7 +196,7 @@ the cache is keyed on text only.
   "versionInfo": {
     "engineVersion": "1.0.0",
     "rulesVersion": "2026-04-17",
-    "agentVersions": { "advertising-law": "1.1.0", "jurisdiction-detection": "1.2.0" },
+    "agentVersions": { "advertising-law": "1.1.0", "ai-laws": "1.3.0" },
     "stackVersion": "2026.04-a7f3"
   },
   "cached": false,

@@ -486,6 +486,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/ComplianceVersionInfo"
 
+  /corpus/refresh:
+    post:
+      operationId: refreshCorpus
+      summary: Force refresh of legal corpus rows
+      description: |
+        Triggers an out-of-band refresh of one or more rows in your tenant's legal corpus.
+        Each corpus row is the pre-researched legal context that Stage A consumes — refreshing
+        forces a new Perplexity research pass for that row, replacing its enrichment with the
+        latest available regulator guidance.
+
+        **When you'd use this**: regulatory guidance changed mid-window (the corpus normally
+        refreshes every 3 days softly / 15 days hard), or you want fresh enrichment before
+        running an important compliance check.
+
+        **Lease-protected**: concurrent calls or repeated calls don't fan out duplicate work.
+        Each row has a 5-minute lease — calls that arrive while the lease is held return
+        `skippedCount += 1` instead of enqueueing.
+
+        **Rate-limited**: max 50 rows enqueued per call. Excess returns as `pending`.
+        Re-call after ~1 minute to drain remaining rows.
+
+        **Idempotent**: returns immediately after enqueueing; the actual refresh runs on a
+        background worker. Subsequent reads automatically pick up the new enrichment.
+      tags: [Compliance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorpusRefreshRequest"
+      responses:
+        "200":
+          description: Refresh enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorpusRefreshResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -732,6 +776,7 @@ components:
     ComplianceAgentId:
       type: string
       enum:
+        - ai-laws
         - jurisdiction-detection
         - advertising-law
         - platform-policy
@@ -742,6 +787,12 @@ components:
         - compliance-score
       description: |
         Agent identifier. Use `GET /agents` to discover all available agents dynamically.
+
+        **`ai-laws` is the canonical id (Phase 1.F, April 2026).** `jurisdiction-detection`
+        is kept as a **deprecated alias** — clients calling `/agents/jurisdiction-detection`
+        continue to work, but new responses always emit `agentId: "ai-laws"`. The legacy id
+        will not be removed; use it only for backward compatibility with stored historical
+        reports that reference it. New integrations should use `ai-laws`.
 
         **Note on rights-clearance variants.** `GET /agents` exposes two registered agents
         for rights clearance: `rights-clearance-text` and `rights-clearance-image` — invoke
@@ -932,7 +983,87 @@ components:
             text:
               type: string
 
+    CorpusRefreshRequest:
+      oneOf:
+        - type: object
+          title: All stale rows
+          required: [scope]
+          properties:
+            scope:
+              type: string
+              enum: [all]
+              description: Refresh every stale row in the tenant's corpus.
+        - type: object
+          title: Area-scoped
+          required: [scope, area, jurisdictions]
+          properties:
+            scope:
+              type: string
+              enum: [area]
+            area:
+              type: string
+              enum: [ai_content, advertising, metadata, rights, data_privacy, platform_policy]
+              description: Which corpus area to refresh.
+            jurisdictions:
+              type: array
+              items:
+                type: string
+                enum: [us, eu, uk, india, china]
+              minItems: 1
+              description: Which jurisdictions in scope.
+        - type: object
+          title: Single law
+          required: [scope, area, jurisdiction, lawId]
+          properties:
+            scope:
+              type: string
+              enum: [law]
+            area:
+              type: string
+              enum: [ai_content, advertising, metadata, rights, data_privacy, platform_policy]
+            jurisdiction:
+              type: string
+              enum: [us, eu, uk, india, china]
+            lawId:
+              type: string
+              description: Specific law id from `jurisdiction-laws.ts`.
+              example: ftc-ai-impersonation-rule
+      description: |
+        Discriminated union on `scope`. Pick the narrowest scope you need —
+        `all` for everything stale, `area` to limit by jurisdiction × area,
+        or `law` for a single row.
+
     # --- Response schemas ---
+
+    CorpusRefreshResponse:
+      type: object
+      required: [requestedCount, enqueuedCount, skippedCount, pending, rateLimit]
+      properties:
+        requestedCount:
+          type: integer
+          description: How many corpus rows the requested scope resolved to.
+          example: 12
+        enqueuedCount:
+          type: integer
+          description: How many rows successfully acquired the lease + got a refresh message enqueued.
+          example: 9
+        skippedCount:
+          type: integer
+          description: |
+            Rows where the lease is currently held by another recent caller
+            (5-min window) or whose row didn't exist. These will refresh on
+            the existing lease holder's enqueue.
+          example: 3
+        pending:
+          type: integer
+          description: |
+            Rows over the 50/request rate limit. Re-call after ~1 minute to
+            enqueue the rest.
+          example: 0
+        rateLimit:
+          type: integer
+          description: Maximum rows enqueued per request.
+          example: 50
 
     WhoAmIResponse:
       type: object
@@ -1264,7 +1395,7 @@ components:
           description: Version per compliance agent. Bumps when an agent's logic changes.
           example:
             advertising-law: "1.1.0"
-            jurisdiction-detection: "1.2.0"
+            ai-laws: "1.3.0"
         stackVersion:
           type: string
           description: |
@@ -1443,7 +1574,7 @@ components:
           type: array
           items:
             type: string
-          example: ["jurisdiction-detection", "advertising-law"]
+          example: ["ai-laws", "advertising-law"]
         totalAgents:
           type: integer
           example: 7

@@ -25,10 +25,10 @@ The response is `Content-Type: text/event-stream`. Events arrive as agents compl
 
 ```
 event: agent.started
-data: {"agentId": "jurisdiction-detection", "phase": 1}
+data: {"agentId": "ai-laws", "phase": 1}
 
 event: agent.completed
-data: {"agentId": "jurisdiction-detection", "checks": [...], "annotations": [...]}
+data: {"agentId": "ai-laws", "checks": [...], "annotations": [...]}
 
 event: agent.started
 data: {"agentId": "advertising-law", "phase": 2}

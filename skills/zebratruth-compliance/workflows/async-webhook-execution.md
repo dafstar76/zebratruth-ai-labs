@@ -46,7 +46,7 @@ Authorization: Bearer {api_key}
 {
   "jobId": "job_xyz789",
   "status": "running",
-  "completedAgents": ["jurisdiction-detection", "advertising-law"],
+  "completedAgents": ["ai-laws", "advertising-law"],
   "totalAgents": 7
 }
 ```
@@ -58,7 +58,7 @@ Status values: `queued` → `pending` → `running` → `completed` | `failed` |
 {
   "jobId": "job_xyz789",
   "status": "completed",
-  "completedAgents": ["jurisdiction-detection", "advertising-law", "platform-policy", "metadata-labeling", "rights-clearance-text", "rights-clearance-image", "compliance-score"],
+  "completedAgents": ["ai-laws", "advertising-law", "platform-policy", "metadata-labeling", "rights-clearance-text", "rights-clearance-image", "compliance-score"],
   "totalAgents": 7,
   "result": {
     "score": 85,

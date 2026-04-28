@@ -9,22 +9,29 @@ ZebraTruth uses a pipeline of specialized AI agents, each focused on a specific 
 
 ## Current Agents
 
-| Agent | Phase | Input | What It Checks |
-|-------|-------|-------|---------------|
-| **Jurisdiction Detection** | 1 | Text | Detects applicable laws (FTC, UCPD, ASA, etc.) |
-| **Advertising Law** | 2 | Text | Claim substantiation, endorsement rules, targeting |
-| **Platform Policy** | 2 | Text | YouTube, Instagram, Facebook, TikTok, LinkedIn rules |
-| **Metadata & Labeling** | 3 | Text | C2PA Content Credentials, AI disclosure labels |
-| **Rights Clearance (Text)** | 3 | Text | Celebrity references, trademarks, copyrighted characters |
-| **Rights Clearance (Image)** | 3 | Image | Celebrity faces, logos, watermarks via computer vision |
-| **Compliance Score** | 4 | All | Deterministic scoring from all checks |
+| Agent | `agentId` | Phase | Input | What It Checks |
+|-------|-----------|-------|-------|----------------|
+| **AI Laws** | `ai-laws` | 1 | Text | AI-content laws — disclosure, watermarking, transparency (EU AI Act Art. 50, California SB 942, Deep Synthesis Provisions, IT Rules, ELVIS Act, etc.) |
+| **Advertising Law** | `advertising-law` | 2 | Text | Claim substantiation, endorsement rules, comparative advertising, targeting restrictions |
+| **Platform Policy** | `platform-policy` | 2 | Text | YouTube, Instagram, Facebook, TikTok, LinkedIn, Douyin, Weibo policies |
+| **Metadata & Labeling** | `metadata-labeling` | 3 | Text | C2PA Content Credentials, AI disclosure labels, machine-readable provenance |
+| **Rights Clearance (Text)** | `rights-clearance-text` | 3 | Text | Celebrity references, trademarks, copyrighted characters, music licensing, voice cloning |
+| **Rights Clearance (Image)** | `rights-clearance-image` | 3 | Image | Celebrity faces, logos, watermarks via computer vision |
+| **Compliance Score** | `compliance-score` | 4 | All | Deterministic scoring from all checks |
+
+<Note>
+**`ai-laws` was renamed from `jurisdiction-detection` in April 2026.** The legacy id
+`jurisdiction-detection` is still accepted on input as a deprecated alias — calls to
+`POST /agents/jurisdiction-detection` continue to work — but new responses always emit
+`agentId: "ai-laws"`. New integrations should use `ai-laws`.
+</Note>
 
 ## Pipeline Phases
 
 In **full mode**, agents run in 4 sequential phases with content enrichment:
 
-1. **Phase 1** — Jurisdiction agent detects applicable laws
-2. **Phase 2** — Advertising Law + Platform agents (parallel), enriched with Phase 1 findings
+1. **Phase 1** — AI Laws agent runs first; produces the `ComplianceProfile` consumed by downstream agents
+2. **Phase 2** — Advertising Law + Platform Policy agents (parallel), enriched with Phase 1 findings
 3. **Phase 3** — Metadata + Rights agents (parallel), enriched with Phase 1+2 findings
 4. **Phase 4** — Score agent aggregates all checks
 
@@ -38,16 +45,20 @@ that's fine: the `stackVersion` field in every response captures the current
 stack identity opaquely, so clients can detect changes without knowing what's
 inside.
 
-| Stage | Role | Cacheable |
-|-------|------|-----------|
-| A | Legal research & citation retrieval | Yes (30-day TTL) |
-| B | Content-specific risk interpretation | No |
-| C | Structured compliance composition | No |
+| Stage | Role | Source |
+|-------|------|--------|
+| A | Legal research & citation retrieval | Tenant-scoped [legal corpus](/concepts/legal-corpus) (3d soft / 15d hard refresh) |
+| B | Content-specific risk interpretation | Fresh per request |
+| C | Structured compliance composition + classification | Fresh per request |
 
-Stage A is cached aggressively because legal research is a pure function of the
-jurisdictions and query topics in scope — same inputs always yield the same
-citations. Stages B and C depend on the actual content being checked, so they
-always run fresh.
+Stage A is sourced from a tenant-scoped legal corpus, refreshed out-of-band by a
+background worker. Reads return immediately for fresh rows (< 3 days old), return
+immediately while triggering a background refresh for stale-but-acceptable rows
+(3–15 days), and block on a synchronous fetch only when missing or hard-expired.
+Stages B and C depend on the actual content being checked, so they always run fresh.
+
+See the [Legal Corpus concept page](/concepts/legal-corpus) for the freshness model,
+hash-based invalidation, and manual refresh.
 
 ## Jurisdiction and Platform Scoping
 
