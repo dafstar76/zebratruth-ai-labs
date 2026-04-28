@@ -37,12 +37,6 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check-image \
   -F "platforms=instagram"
 ```
 
-<Note>
-  **Multipart constraints.** Flat fields — repeat `jurisdictions`, `platforms`, and
-  `image` once per value (not comma-separated, not a JSON array). At least one and at
-  most two `image` parts. Total request body capped at 4.5 MB by the platform.
-</Note>
-
 ## What It Checks
 
 1. **C2PA / IPTC metadata** — Content Credentials, provenance, AI generation markers

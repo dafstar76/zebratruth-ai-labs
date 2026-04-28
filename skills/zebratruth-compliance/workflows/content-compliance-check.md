@@ -79,17 +79,6 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check \
   -F "mode=fast"
 ```
 
-Multipart rules:
-- Flat fields — repeat `jurisdictions`, `platforms`, and `image` once per value
-  (NOT comma-separated, NOT JSON arrays)
-- Up to 2 `image` parts
-- Total request body capped at 4.5 MB by the platform
-
-**Cache bypass with images.** The response cache is keyed on text only. Requests
-that include any `image` parts (multipart) or a non-empty `imageUrls` array (JSON)
-skip the cache and are always billed. This avoids serving the wrong image-rights
-result from a prior request with different images.
-
 ### Step 4: Handle the Response
 
 **Sync mode** — the full report is in the response body.

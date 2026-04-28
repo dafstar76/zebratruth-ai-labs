@@ -19,13 +19,6 @@ ZebraTruth uses a pipeline of specialized AI agents, each focused on a specific 
 | **Rights Clearance (Image)** | `rights-clearance-image` | 3 | Image | Celebrity faces, logos, watermarks via computer vision |
 | **Compliance Score** | `compliance-score` | 4 | All | Deterministic scoring from all checks |
 
-<Note>
-**`ai-laws` was renamed from `jurisdiction-detection` in April 2026.** The legacy id
-`jurisdiction-detection` is still accepted on input as a deprecated alias — calls to
-`POST /agents/jurisdiction-detection` continue to work — but new responses always emit
-`agentId: "ai-laws"`. New integrations should use `ai-laws`.
-</Note>
-
 ## Pipeline Phases
 
 In **full mode**, agents run in 4 sequential phases with content enrichment:
@@ -47,18 +40,18 @@ inside.
 
 | Stage | Role | Source |
 |-------|------|--------|
-| A | Legal research & citation retrieval | Tenant-scoped [legal corpus](/concepts/legal-corpus) (3d soft / 15d hard refresh) |
+| A | Legal research & citation retrieval | Tenant-scoped [legal corpus](/concepts/legal-corpus) with stale-while-revalidate refresh |
 | B | Content-specific risk interpretation | Fresh per request |
 | C | Structured compliance composition + classification | Fresh per request |
 
 Stage A is sourced from a tenant-scoped legal corpus, refreshed out-of-band by a
-background worker. Reads return immediately for fresh rows (< 3 days old), return
-immediately while triggering a background refresh for stale-but-acceptable rows
-(3–15 days), and block on a synchronous fetch only when missing or hard-expired.
-Stages B and C depend on the actual content being checked, so they always run fresh.
+background worker. Reads return immediately for fresh rows, return immediately while
+triggering a background refresh for stale-but-acceptable rows, and block on a
+synchronous fetch only when missing or expired. Stages B and C depend on the actual
+content being checked, so they always run fresh.
 
-See the [Legal Corpus concept page](/concepts/legal-corpus) for the freshness model,
-hash-based invalidation, and manual refresh.
+See the [Legal Corpus concept page](/concepts/legal-corpus) for the freshness model
+and manual refresh.
 
 ## Jurisdiction and Platform Scoping
 

@@ -493,21 +493,19 @@ paths:
       description: |
         Triggers an out-of-band refresh of one or more rows in your tenant's legal corpus.
         Each corpus row is the pre-researched legal context that Stage A consumes — refreshing
-        forces a new Perplexity research pass for that row, replacing its enrichment with the
-        latest available regulator guidance.
+        replaces its enrichment with the latest available regulator guidance.
 
-        **When you'd use this**: regulatory guidance changed mid-window (the corpus normally
-        refreshes every 3 days softly / 15 days hard), or you want fresh enrichment before
-        running an important compliance check.
+        **When you'd use this**: regulatory guidance changed mid-window, or you want fresh
+        enrichment before running an important compliance check.
 
-        **Lease-protected**: concurrent calls or repeated calls don't fan out duplicate work.
-        Each row has a 5-minute lease — calls that arrive while the lease is held return
+        **Idempotent**: concurrent calls or repeated calls on the same row don't fan out
+        duplicate work — calls that arrive while a refresh is already in flight return
         `skippedCount += 1` instead of enqueueing.
 
         **Rate-limited**: max 50 rows enqueued per call. Excess returns as `pending`.
         Re-call after ~1 minute to drain remaining rows.
 
-        **Idempotent**: returns immediately after enqueueing; the actual refresh runs on a
+        **Async**: returns immediately after enqueueing; the actual refresh runs on a
         background worker. Subsequent reads automatically pick up the new enrichment.
       tags: [Compliance]
       requestBody:
@@ -788,11 +786,9 @@ components:
       description: |
         Agent identifier. Use `GET /agents` to discover all available agents dynamically.
 
-        **`ai-laws` is the canonical id (Phase 1.F, April 2026).** `jurisdiction-detection`
-        is kept as a **deprecated alias** — clients calling `/agents/jurisdiction-detection`
-        continue to work, but new responses always emit `agentId: "ai-laws"`. The legacy id
-        will not be removed; use it only for backward compatibility with stored historical
-        reports that reference it. New integrations should use `ai-laws`.
+        `ai-laws` is the canonical id; `jurisdiction-detection` is accepted as an
+        input alias for backward compatibility with historical clients. New
+        integrations should use `ai-laws`.
 
         **Note on rights-clearance variants.** `GET /agents` exposes two registered agents
         for rights clearance: `rights-clearance-text` and `rights-clearance-image` — invoke
