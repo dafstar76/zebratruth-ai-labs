@@ -984,15 +984,145 @@ components:
           type: string
           enum: [free, starter, pro, enterprise]
 
+    CheckId:
+      type: string
+      pattern: "^chk_[0-9a-f]{8}$"
+      description: |
+        Stable check identifier. Format: `chk_<8 lowercase hex>`. Generated as a
+        SHA-256 hash of (agentId, checkName, citation, sorted jurisdictions,
+        sorted platforms, primaryCategory) — stable across reruns of identical
+        content + scope + engine version. NOT stable across taxonomy
+        reclassifications (primaryCategory change) or content/scope changes.
+      example: chk_a1b2c3d4
+
+    CheckScope:
+      type: string
+      enum:
+        - global
+        - jurisdiction-specific
+        - platform-specific
+        - cross-cutting
+      description: |
+        Disambiguates the empty-array case for `jurisdictions` and `platforms`:
+        - `global` — universal; both arrays empty
+        - `jurisdiction-specific` — jurisdictions populated, platforms empty
+        - `platform-specific` — platforms populated, jurisdictions empty
+        - `cross-cutting` — both populated; check applies at the intersection
+
+    CheckCategory:
+      type: string
+      enum:
+        - celebrity-endorsement
+        - expert-authority
+        - fabricated-testimonial
+        - material-connection-disclosure
+        - unsubstantiated-health-claim
+        - medical-efficacy-claim
+        - safety-claim
+        - performance-claim
+        - comparative-advertising
+        - right-of-publicity
+        - trademark-infringement
+        - copyright-infringement
+        - music-licensing
+        - ai-disclosure-missing
+        - watermark-missing
+        - c2pa-missing
+        - deepfake-impersonation
+        - disguised-advertising
+        - sponsored-content-labeling
+        - consumer-information-disclosure
+        - scarcity-urgency
+        - aggressive-practice
+        - algorithmic-amplification
+        - minor-targeting
+        - vulnerable-audience
+        - platform-policy-violation
+        - data-privacy
+        - jurisdiction-coverage-gap
+        - other
+      description: |
+        Top-level breach taxonomy. New categories may be added in minor versions
+        (additive only); renaming and removal are forbidden. Clients MUST accept
+        unknown enum values gracefully (forward-compat). `other` is the fallback
+        bucket for findings that don't fit any specific category.
+
+    CheckIndexes:
+      type: object
+      description: |
+        Pre-computed reference indexes — pure ID lists, no content duplication.
+        Tenants pick whichever organization fits their UI. Combine via set
+        intersection (e.g., critical EU findings = bySeverity.critical ∩
+        byJurisdiction.eu). All seven dimensions always present; empty buckets
+        are included so client code can do `indexes.byJurisdiction.us ?? []`
+        without optional-chaining on the bucket itself.
+      properties:
+        byJurisdiction:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/CheckId"
+          description: Keyed by jurisdiction code (us, eu, uk, india, china).
+        byPlatform:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/CheckId"
+          description: Keyed by platform code (youtube, instagram, facebook, tiktok, linkedin).
+        bySeverity:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/CheckId"
+          description: Keyed by severity (info, low, medium, high, critical).
+        byStatus:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/CheckId"
+          description: Keyed by status (pass, flag, block, escalate).
+        byCategory:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/CheckId"
+          description: Keyed by `primaryCategory` only — each check appears in exactly one bucket.
+        byCategoryAll:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/CheckId"
+          description: Keyed by every category in `categories[]` — a check may appear in multiple buckets.
+        byAgent:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/CheckId"
+          description: Keyed by agentId.
+
     ComplianceCheck:
       type: object
+      description: |
+        A single compliance finding. Includes both the raw finding fields
+        (checkName, severity, message, recommendation, citation) and structured
+        classification metadata added by the engine (id, jurisdictions, platforms,
+        scope, primaryCategory, categories).
       properties:
+        id:
+          $ref: "#/components/schemas/CheckId"
         agentId:
           $ref: "#/components/schemas/ComplianceAgentId"
         checkName:
           type: string
-          description: Machine-readable check identifier
-          example: unsubstantiated-claim
+          description: Human-readable check name
+          example: "Unsubstantiated Health Claim - 'Cure Cancer'"
         status:
           $ref: "#/components/schemas/ComplianceStatus"
         severity:
@@ -1000,18 +1130,50 @@ components:
         message:
           type: string
           description: Human-readable description of the issue
-          example: "'Guaranteed results' may violate FTC endorsement guides"
+          example: "'Guaranteed to cure cancer' is an unsubstantiated health claim under FTC and EU UCPD."
         recommendation:
           type: string
           description: Specific action to fix the issue
-          example: "Remove or substantiate the guarantee claim"
+          example: "Remove the guarantee or substantiate with peer-reviewed clinical evidence."
         citation:
           type: string
           description: Legal or policy reference
-          example: "16 CFR Part 255"
+          example: "FTC Endorsement Guides, 16 CFR Part 255"
         metadata:
           type: string
           description: Optional JSON string with agent-specific data
+        jurisdictions:
+          type: array
+          items:
+            type: string
+          description: |
+            Canonical jurisdiction codes (us, eu, uk, india, china) this check
+            applies to. May be empty when `scope` is `global` or `platform-specific`.
+            Always a subset of the request's jurisdiction list.
+          example: [us, eu]
+        platforms:
+          type: array
+          items:
+            type: string
+          description: |
+            Canonical platform codes (youtube, instagram, facebook, tiktok, linkedin)
+            this check applies to. May be empty when `scope` is `global` or
+            `jurisdiction-specific`. Always a subset of the request's platform list.
+          example: [youtube, instagram]
+        scope:
+          $ref: "#/components/schemas/CheckScope"
+        primaryCategory:
+          $ref: "#/components/schemas/CheckCategory"
+        categories:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CheckCategory"
+          description: |
+            All matched categories, with `primaryCategory` first. A finding may
+            apply to multiple categories (e.g. a deepfake celebrity check matches
+            both `deepfake-impersonation` and `right-of-publicity`).
+          example: [unsubstantiated-health-claim, performance-claim]
 
     ComplianceAnnotation:
       type: object
@@ -1021,7 +1183,13 @@ components:
           $ref: "#/components/schemas/AnnotationType"
         checkRef:
           type: string
-          description: Links to ComplianceCheck.checkName
+          description: |
+            DEPRECATED. Legacy link to `ComplianceCheck.checkName`. Use `checkId`
+            instead — it's a stable hash that survives prompt wording changes.
+            Retained for backward compatibility; will be removed in a future
+            major version.
+        checkId:
+          $ref: "#/components/schemas/CheckId"
         agentId:
           $ref: "#/components/schemas/ComplianceAgentId"
         severity:
@@ -1196,6 +1364,21 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ComplianceCheck"
+          description: |
+            All compliance findings. Each check has structured classification
+            metadata (id, jurisdictions, platforms, scope, primaryCategory,
+            categories) added inline. Combine `bySeverity` + `byJurisdiction`
+            etc. via the `indexes` field for filtered views.
+        checksById:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ComplianceCheck"
+          description: |
+            O(1) lookup map keyed by stable `id`. Same data as `checks[]`,
+            indexed for direct access (e.g. when resolving an annotation's
+            `checkId` to its parent check).
+        indexes:
+          $ref: "#/components/schemas/CheckIndexes"
         annotations:
           type: array
           items:
@@ -1299,6 +1482,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ComplianceCheck"
+        checksById:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ComplianceCheck"
+        indexes:
+          $ref: "#/components/schemas/CheckIndexes"
         annotations:
           type: array
           items:
@@ -1313,6 +1502,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ComplianceCheck"
+        checksById:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ComplianceCheck"
+        indexes:
+          $ref: "#/components/schemas/CheckIndexes"
         annotations:
           type: array
           items:

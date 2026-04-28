@@ -1,0 +1,112 @@
+---
+title: "Check Classification & Indexes"
+description: "Every compliance check is tagged with a stable ID, scope, and category — and the response ships pre-computed indexes for filtering by jurisdiction, platform, severity, status, category, or agent."
+---
+
+Every check returned by ZebraTruth has structured classification metadata that lets you slice findings without writing your own filter logic. The response also ships pre-computed indexes that you can intersect for combined filters (e.g. *critical EU YouTube findings*).
+
+## Per-check classification
+
+Every `ComplianceCheck` includes:
+
+| Field | Type | What it tells you |
+|-------|------|-------------------|
+| `id` | `chk_<8 hex>` | Stable identifier - same content + scope + engine version always returns the same id |
+| `jurisdictions` | `string[]` | Which jurisdictions this finding applies to. Subset of the request's jurisdictions list. May be empty when `scope = global` or `platform-specific`. |
+| `platforms` | `string[]` | Which platforms this finding applies to. Subset of the request's platforms list. May be empty when `scope = global` or `jurisdiction-specific`. |
+| `scope` | enum | Disambiguates the empty-array case — see below |
+| `primaryCategory` | enum | Best-fit category bucket (one of 28 + `other`) |
+| `categories` | enum array | All matching categories, with `primaryCategory` first |
+
+### Scope values
+
+The `scope` field distinguishes four reasons a `jurisdictions` or `platforms` array might be empty:
+
+| `scope` | jurisdictions | platforms | Meaning |
+|---------|---------------|-----------|---------|
+| `global` | `[]` | `[]` | Universal best-practice finding (e.g. a clarity recommendation) |
+| `jurisdiction-specific` | populated | `[]` | Applies to specific jurisdictions, platform-agnostic (e.g. an FTC violation regardless of platform) |
+| `platform-specific` | `[]` | populated | Applies to specific platforms, jurisdiction-agnostic (e.g. a YouTube monetization rule) |
+| `cross-cutting` | populated | populated | Applies at the intersection (e.g. EU AI Act on TikTok specifically) |
+
+## Category taxonomy
+
+28 categories + an `other` fallback. Categories are **stable contracts** — new categories may be added in minor versions, but renames and removals are forbidden. Always handle unknown enum values gracefully (forward-compat).
+
+| Group | Categories |
+|-------|------------|
+| Endorsement & authority | `celebrity-endorsement`, `expert-authority`, `fabricated-testimonial`, `material-connection-disclosure` |
+| Claims | `unsubstantiated-health-claim`, `medical-efficacy-claim`, `safety-claim`, `performance-claim`, `comparative-advertising` |
+| IP & rights | `right-of-publicity`, `trademark-infringement`, `copyright-infringement`, `music-licensing` |
+| AI & synthetic media | `ai-disclosure-missing`, `watermark-missing`, `c2pa-missing`, `deepfake-impersonation` |
+| Format & transparency | `disguised-advertising`, `sponsored-content-labeling`, `consumer-information-disclosure` |
+| Manipulation | `scarcity-urgency`, `aggressive-practice`, `algorithmic-amplification` |
+| Audience | `minor-targeting`, `vulnerable-audience` |
+| Platform & other | `platform-policy-violation`, `data-privacy`, `jurisdiction-coverage-gap` |
+| Fallback | `other` |
+
+A finding may belong to multiple categories (e.g. a deepfake celebrity endorsement matches both `deepfake-impersonation` and `right-of-publicity`). `primaryCategory` is the best fit; `categories[]` lists all matches.
+
+## Indexes for fast filtering
+
+The response includes a top-level `indexes` field with seven dimensions, each mapping a key to an array of stable check IDs:
+
+```json
+{
+  "indexes": {
+    "byJurisdiction": { "us": ["chk_a1b2c3d4", "chk_..."], "eu": ["chk_..."] },
+    "byPlatform":     { "youtube": ["chk_..."], "tiktok": ["chk_..."] },
+    "bySeverity":     { "critical": ["chk_..."], "high": ["chk_..."] },
+    "byStatus":       { "block": ["chk_..."], "flag": ["chk_..."] },
+    "byCategory":     { "unsubstantiated-health-claim": ["chk_..."] },
+    "byCategoryAll":  { "right-of-publicity": ["chk_...", "chk_..."] },
+    "byAgent":        { "advertising-law": ["chk_..."] }
+  }
+}
+```
+
+`byCategory` indexes the `primaryCategory` only (each check appears in exactly one bucket). `byCategoryAll` indexes every entry in `categories[]` — a check with multiple categories appears in multiple buckets.
+
+### Filtering by intersection
+
+The indexes are pure ID lists, so combining them is a set intersection:
+
+```ts
+// Critical findings on EU YouTube content
+const critical = new Set(report.indexes.bySeverity.critical ?? [])
+const eu = new Set(report.indexes.byJurisdiction.eu ?? [])
+const youtube = new Set(report.indexes.byPlatform.youtube ?? [])
+
+const matchingIds = [...critical].filter(id => eu.has(id) && youtube.has(id))
+const matchingChecks = matchingIds.map(id => report.checksById[id])
+```
+
+`checksById` is the O(1) lookup map for resolving an ID back to the full check object — same data as the `checks[]` array, just keyed for direct access.
+
+## Annotation linkage
+
+Annotations include a `checkId` field (also stable `chk_<8 hex>` format) that links each annotation to its parent check. UI flows can use this to:
+
+- Highlight all annotations belonging to the selected check
+- Navigate from a clicked annotation to its parent check's detail view
+- Filter annotations by the same dimensions as their parent check (via `checksById[annotation.checkId]`)
+
+The legacy `checkRef` field (linking by `checkName` string) is retained for backward compatibility but **deprecated**; prefer `checkId`.
+
+## Stability semantics
+
+The `id` is generated as a SHA-256 hash of:
+
+```
+agentId | checkName | citation | sorted(jurisdictions) | sorted(platforms) | primaryCategory
+```
+
+This means:
+
+- ✅ **Stable** across reruns of identical content + scope + engine version
+- ✅ **Stable** across engine deploys if none of the hash inputs change
+- ❌ **NOT stable** if Stage C produces a different `checkName` for what's conceptually the same finding (rare; requires prompt-level change)
+- ❌ **NOT stable** across taxonomy reclassification (`primaryCategory` change)
+- 📌 **Hash inputs deliberately exclude** `message`, `recommendation`, `severity`, `status` — prompt wording changes and downstream classification shifts don't churn IDs
+
+If you cache results keyed by `id`, expect occasional cache misses around major engine releases. The OpenAPI changelog notes any change to hash inputs.
