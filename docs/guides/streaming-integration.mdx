@@ -1,84 +1,183 @@
 ---
 title: Streaming Integration (SSE)
-description: Step-by-step guide
+description: Receive progressive compliance results over Server-Sent Events
 ---
 
 # Streaming Integration (SSE)
 
-Consume progressive compliance results via Server-Sent Events. Each agent fires events as it completes, so clients can show early warnings immediately.
+Set `responseMode: "stream"` to receive progressive compliance results as each agent finishes. The connection stays open until the run completes; events arrive as soon as each phase produces output. Useful when you want to show live progress in a UI rather than waiting 60–240 seconds for a single sync response.
 
 ## Endpoint
 
-```
+```http
 POST https://api.zebratruth.ai/v1/compliance/check
 Authorization: Bearer {api_key}
 Content-Type: application/json
-Idempotency-Key: {uuid}
+Accept: text/event-stream
 
 {
-  "jurisdictions": ["us", "eu"],
+  "jurisdictions": ["us"],
   "platforms": ["youtube"],
   "content": { "text": "..." },
-  "mode": "full",
+  "mode": "fast",
   "responseMode": "stream"
 }
 ```
 
-## SSE Event Stream
+The response is `Content-Type: text/event-stream`. Time-to-first-event is typically under 1 second.
 
-The response is `Content-Type: text/event-stream`. Events arrive as agents complete:
+## Event sequence
+
+A successful run produces this sequence (events are SSE format: `event: <type>\ndata: <json>\n\n`):
 
 ```
-event: agent.started
-data: {"agentId": "ai-laws", "phase": 1}
-
-event: agent.completed
-data: {"agentId": "ai-laws", "checks": [...], "annotations": [...]}
+event: job.started
+data: {"timestamp":"2026-05-01T03:04:06.683Z"}
 
 event: agent.started
-data: {"agentId": "advertising-law", "phase": 2}
+data: {"agentId":"ai-laws","timestamp":"..."}
 
 event: agent.started
-data: {"agentId": "platform-policy", "phase": 2}
+data: {"agentId":"advertising-law","timestamp":"..."}
+
+event: agent.started
+data: {"agentId":"platform-policy","timestamp":"..."}
+
+event: agent.started
+data: {"agentId":"metadata-labeling","timestamp":"..."}
+
+event: agent.started
+data: {"agentId":"rights-clearance","timestamp":"..."}
 
 event: agent.completed
-data: {"agentId": "advertising-law", "checks": [...], "annotations": [...]}
+data: {"agentId":"platform-policy","checks":[...],"timestamp":"..."}
 
 event: agent.completed
-data: {"agentId": "platform-policy", "checks": [...], "annotations": [...]}
+data: {"agentId":"advertising-law","checks":[...],"timestamp":"..."}
 
-event: score
-data: {"score": 72, "decision": "HOLD"}
+... (more agent.completed events as each agent finishes) ...
+
+event: score.computed
+data: {"score":10,"decision":"BLOCK","timestamp":"..."}
 
 event: complete
-data: {"reportId": "rpt_abc", "versionInfo": {...}, "costBreakdown": {...}}
+data: {"data": { /* full classified response */ }, "timestamp":"..."}
 ```
 
-## Reconnecting After Disconnect
+The terminal event is always either `complete` (success) or `error` (failure). After a terminal event the server closes the connection.
 
-If the SSE connection drops, resume from the last completed agent:
+### Event types
+
+| Event | When | Payload |
+|---|---|---|
+| `job.started` | Once, immediately after headers flush | `{ timestamp }` |
+| `agent.started` | Once per agent, when the agent begins work | `{ agentId, timestamp }` |
+| `agent.completed` | Once per agent, when the agent's promise resolves | `{ agentId, checks: [], timestamp }` |
+| `score.computed` | After Stage D finishes scoring | `{ score, decision, timestamp }` |
+| `complete` | Terminal success | `{ data: { score, decision, checks, checksById, indexes, annotations, profile, agentSummaries, versionInfo, creditsCharged, cached, costBreakdown }, timestamp }` |
+| `error` | Terminal failure | `{ message, code, timestamp }` |
+
+`agentId` is one of: `ai-laws`, `advertising-law`, `rights-clearance`, `rights-clearance-image`, `metadata-labeling`, `platform-policy`.
+
+## Client implementation
+
+### EventSource (browser)
+
+```javascript
+// EventSource doesn't support custom headers in the browser, so use fetch
+// with a ReadableStream instead. Native EventSource is fine for tests
+// without auth, or via a same-origin proxy that injects the API key.
+const response = await fetch('https://api.zebratruth.ai/v1/compliance/check', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+  },
+  body: JSON.stringify({
+    jurisdictions: ['us'],
+    platforms: ['youtube'],
+    content: { text: '...' },
+    mode: 'fast',
+    responseMode: 'stream',
+  }),
+})
+
+const reader = response.body.getReader()
+const decoder = new TextDecoder()
+let buffer = ''
+
+while (true) {
+  const { value, done } = await reader.read()
+  if (done) break
+  buffer += decoder.decode(value, { stream: true })
+
+  // Split on the SSE event terminator (blank line)
+  const events = buffer.split('\n\n')
+  buffer = events.pop() ?? ''
+
+  for (const raw of events) {
+    const lines = raw.split('\n')
+    const eventLine = lines.find((l) => l.startsWith('event: '))
+    const dataLine = lines.find((l) => l.startsWith('data: '))
+    if (!eventLine || !dataLine) continue
+
+    const type = eventLine.slice(7)
+    const data = JSON.parse(dataLine.slice(6))
+
+    if (type === 'agent.completed') {
+      console.log(`${data.agentId} → ${data.checks.length} checks`)
+    } else if (type === 'complete') {
+      console.log('done', data)
+      reader.cancel()
+      break
+    } else if (type === 'error') {
+      console.error('pipeline error:', data.message, data.code)
+      reader.cancel()
+      break
+    }
+  }
+}
+```
+
+### curl
+
+For quick testing:
+
+```bash
+curl -N -X POST https://api.zebratruth.ai/v1/compliance/check \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jurisdictions":["us"],"platforms":["youtube"],"content":{"text":"..."},"mode":"fast","responseMode":"stream"}'
+```
+
+The `-N` flag disables curl's output buffering so you see events arrive progressively.
+
+## Concurrent stream limit
+
+A maximum of **5 concurrent streams per tenant** is enforced. Requests over the cap return `429` with a message advising retry. The cap exists to prevent runaway clients from holding open many connections at once. If you legitimately need higher concurrency, contact support.
+
+## When to use streaming vs. async
+
+Streaming holds a connection open for the entire run (typically 60–240 seconds depending on `mode` and scope). Choose:
+
+- **Streaming** when you want to render live progress in a UI and the client can keep a connection open.
+- **Async + webhook** ([guide](/guides/async-webhook-execution)) when the client can't or shouldn't hold a connection open — server-to-server pipelines, mobile apps, or batch workflows.
+- **Sync** (the default) when the run is short enough that progress events aren't worth the complexity.
+
+## Error handling
+
+A pipeline failure delivers a single `error` event then closes:
 
 ```
-GET https://api.zebratruth.ai/v1/compliance/jobs/{jobId}/stream?resumeFrom=advertising-law
-Authorization: Bearer {api_key}
+event: error
+data: {"message":"Compliance pipeline error: ...","code":"pipeline_error","timestamp":"..."}
 ```
 
-The `jobId` is returned in the initial response headers as `X-Job-Id`.
+Network disconnects mid-run: the orchestration continues server-side until completion. To recover the result, store the request with a sync re-issue or — preferred — use `responseMode: "async"` from the start so the result lands in your webhook and persists in the polling endpoint.
 
-Partial results are persisted server-side. The stream resumes from the next uncompleted agent.
+## Limitations
 
-## Client Implementation Notes
-
-1. Parse each `event:` + `data:` pair as a discrete event
-2. On `agent.completed` — update UI with partial checks and annotations
-3. On `score` — show the compliance score immediately
-4. On `complete` — fetch the full report if needed via `GET /reports/{reportId}`
-5. On disconnect — reconnect using `resumeFrom` with the last completed agentId
-
-## When to Use Streaming
-
-- Full mode checks (4 phases, takes 20-60 seconds)
-- When the client wants to show progressive status: "Checking jurisdiction... Checking ad law... 2 issues found so far..."
-- When the client wants to display annotations as they arrive
-
-For fast mode (under 10 seconds), sync mode is usually sufficient.
+- **No resume from a specific event**. There is no `resumeFrom=advertising-law` query parameter. If the connection drops, re-issue the request (idempotency keys deduplicate).
+- **No partial fallback**. If the orchestrator fails mid-run, the server emits one `error` event with the failure reason — partial check results are not returned.
+- **Multipart requests stay sync**. The `multipart/form-data` upload path does not support `responseMode: "stream"`. Pass image URLs in the JSON body if you need streaming with image inputs.

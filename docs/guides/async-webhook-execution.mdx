@@ -1,137 +1,259 @@
 ---
-title: Async Webhook Execution
-description: Step-by-step guide
+title: Async + Webhook Execution
+description: Submit a compliance check, get notified by webhook when it's ready, fall back to polling if the webhook misses
 ---
 
-# Async Webhook Execution
+# Async + Webhook Execution
 
-Submit a compliance check and receive results via webhook callback. Best for batch processing, background pipelines, and full mode checks at scale.
+Use `responseMode: "async"` when you can't or shouldn't hold an HTTP connection open for the duration of a compliance run (server-to-server pipelines, mobile apps, batch workflows). The API returns immediately with a `jobId`, processes the check in the background, and delivers the result to your webhook URL when complete. A polling endpoint exists as a recovery and verification fallback.
 
-## Step 1: Submit the Check
+## How it works
 
 ```
+┌────────┐ ─POST /v1/compliance/check──> ┌─────────────┐
+│ Client │                               │ ZebraTruth  │
+│        │ <──────── 202 + jobId ─────── │             │
+└────────┘                               └─────────────┘
+                                              │ (60–240s background work)
+                                              ▼
+                                          ┌────────────┐
+                                          │ Orchestrator│
+                                          └──────┬──────┘
+                                                 │
+                                ┌────────────────┴────────────────┐
+                                ▼                                 ▼
+                       ┌──────────────────┐           ┌────────────────────┐
+                       │ POST your        │           │ GET                │
+                       │ webhookUrl       │           │ /v1/compliance/    │
+                       │ (HMAC signed)    │           │ jobs/{jobId}       │
+                       └──────────────────┘           └────────────────────┘
+                       primary delivery               fallback / verification
+```
+
+## Step 1 — Submit the check
+
+```http
 POST https://api.zebratruth.ai/v1/compliance/check
 Authorization: Bearer {api_key}
 Content-Type: application/json
-Idempotency-Key: {uuid}
 
 {
-  "jurisdictions": ["us", "eu"],
-  "platforms": ["youtube", "instagram"],
+  "jurisdictions": ["us"],
+  "platforms": ["youtube"],
   "content": { "text": "..." },
-  "mode": "full",
+  "mode": "fast",
   "responseMode": "async",
   "webhookUrl": "https://your-app.com/webhooks/zebratruth",
-  "callbackId": "my-project-456"
+  "callbackId": "my-internal-id-456"
 }
 ```
 
-**Response (immediate):**
+`webhookUrl` is **required** when `responseMode` is `async` — the API returns `400` without it.
+
+`callbackId` is your opaque tag, echoed back in the webhook payload and the polling response. Use it to correlate the result with whatever record triggered the check.
+
+### Response — `202 Accepted`
+
 ```json
 {
-  "jobId": "job_xyz789",
+  "jobId": "job_dd1928e710aa4e16",
   "status": "queued",
-  "estimatedCredits": 47,
-  "queuePosition": 1,
-  "pollUrl": "/v1/compliance/jobs/job_xyz789"
+  "callbackId": "my-internal-id-456",
+  "webhookSecret": "whsec_4b8a2e7f9c1d3e6a5b8c0f2d4e7a1b3c"
 }
 ```
 
-Budget is reserved before the job enters the queue. If credits are insufficient, you get 402 immediately.
+**Save the `webhookSecret` keyed by `jobId`.** You'll use it to verify the HMAC on the eventual webhook delivery. **It is returned only in this 202 response** — the polling endpoint never re-exposes it.
 
-## Step 2: Poll for Status (optional)
+The 202 returns in well under a second; orchestration runs in the background.
 
-```
-GET https://api.zebratruth.ai/v1/compliance/jobs/job_xyz789
-Authorization: Bearer {api_key}
-```
-
-**Response:**
-```json
-{
-  "jobId": "job_xyz789",
-  "status": "running",
-  "completedAgents": ["ai-laws", "advertising-law"],
-  "totalAgents": 7
-}
-```
-
-Status values: `queued` → `pending` → `running` → `completed` | `failed` | `dead`
-
-**Completed response (includes full report inline):**
-```json
-{
-  "jobId": "job_xyz789",
-  "status": "completed",
-  "completedAgents": ["ai-laws", "advertising-law", "platform-policy", "metadata-labeling", "rights-clearance-text", "rights-clearance-image", "compliance-score"],
-  "totalAgents": 7,
-  "result": {
-    "score": 85,
-    "decision": "PUBLISH",
-    "checks": [...],
-    "annotations": [...],
-    "versionInfo": {...},
-    "costBreakdown": {...}
-  }
-}
-```
-
-## Step 3: Receive Webhook
+## Step 2 — Receive the webhook
 
 When the check completes, ZebraTruth POSTs to your `webhookUrl`:
 
-```json
+```http
+POST https://your-app.com/webhooks/zebratruth
+Content-Type: application/json
+X-ZebraTruth-Event-Id: evt_0971a7addc874ba7
+X-ZebraTruth-Timestamp: 2026-05-01T03:58:52.553Z
+X-ZebraTruth-Signature: sha256=bbb03af37790b7d003d3a3c13a620018e340ded24b45c28eb1e82a23a64d131b
+
 {
-  "eventId": "evt_abc123",
-  "event": "check.completed",
-  "jobId": "job_xyz789",
-  "callbackId": "my-project-456",
-  "timestamp": "2026-04-16T12:00:00Z",
+  "eventId": "evt_0971a7addc874ba7",
+  "event": "compliance.completed",
+  "jobId": "job_dd1928e710aa4e16",
+  "callbackId": "my-internal-id-456",
+  "timestamp": "2026-05-01T03:58:52.553Z",
   "version": 1,
   "data": {
-    "score": 85,
-    "decision": "PUBLISH",
-    "checks": [...],
-    "annotations": [...],
-    "versionInfo": {...},
-    "costBreakdown": {...}
+    "jobId": "job_dd1928e710aa4e16",
+    "score": 10,
+    "decision": "BLOCK",
+    "checks": [ /* full classified checks */ ],
+    "checksById": { /* O(1) lookup map */ },
+    "indexes": { /* byJurisdiction / bySeverity / etc. */ },
+    "annotations": [],
+    "profile": { /* compliance profile */ },
+    "agentSummaries": { /* per-agent rollup */ },
+    "versionInfo": { /* stack version */ },
+    "creditsCharged": 12,
+    "cached": false,
+    "costBreakdown": { "totalCredits": 12, "agents": [] }
   }
 }
 ```
 
-### Webhook Security
-
-- **HMAC Signature**: `X-ZebraTruth-Signature: sha256=<hmac(secret, body)>`
-- **Timestamp**: `X-ZebraTruth-Timestamp` — reject if `abs(now - timestamp) > 5 minutes`
-- **Dedup**: Use `eventId` to deduplicate (at-least-once delivery)
-
-### Webhook Failure Handling
-
-- 3 retry attempts: 1s, 5s, 25s exponential backoff
-- After 3 failures: moved to dead letter queue
-- Check failed deliveries: `GET /v1/webhooks/deliveries?status=dead`
-
-## Error Events
-
-If the check fails, webhook delivers:
+### On failure — `compliance.failed`
 
 ```json
 {
-  "event": "check.failed",
-  "jobId": "job_xyz789",
+  "eventId": "evt_...",
+  "event": "compliance.failed",
+  "jobId": "job_...",
+  "callbackId": "...",
+  "timestamp": "...",
+  "version": 1,
   "data": {
-    "error": "Agent timeout exceeded",
-    "partialResults": {...}
+    "jobId": "job_...",
+    "error": {
+      "message": "Compliance pipeline error: ...",
+      "code": "pipeline_error"
+    }
   }
 }
 ```
 
-## Queue Priority
+### Verifying the signature
 
-Jobs are processed in priority order by tier:
-1. Enterprise (highest)
-2. Pro
-3. Starter
-4. Free (lowest)
+```javascript
+import crypto from 'node:crypto'
 
-Job TTL is 1 hour. If not processed within that time, the job is moved to dead letter and the budget reservation is released.
+function verifyWebhook({ rawBody, headers, secret }) {
+  const signature = headers['x-zebratruth-signature']
+  const timestamp = headers['x-zebratruth-timestamp']
+  if (!signature || !timestamp) return false
+
+  // Reject if the timestamp is more than 5 minutes off — replay protection.
+  if (Math.abs(Date.now() - new Date(timestamp).getTime()) > 5 * 60 * 1000) {
+    return false
+  }
+
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', secret)
+    .update(rawBody)
+    .digest('hex')
+
+  // Constant-time comparison
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected),
+  )
+}
+```
+
+Pass `rawBody` as the unparsed request body bytes. Do not parse + re-stringify the JSON before verifying — even semantically-equivalent reformatting changes the byte representation and breaks the HMAC.
+
+### Delivery guarantees
+
+- **At-least-once.** Use `eventId` to deduplicate on your side.
+- **Retry policy.** Up to 4 attempts (initial + 3 retries) with delays `1 s, 5 s, 25 s`. After exhaustion the delivery is recorded as `dead` in our internal log.
+- **Timeout.** Each delivery attempt has a 10-second per-request timeout. Make your webhook handler fast — return `2xx` and process asynchronously if the work is heavy.
+
+If your webhook returns any non-`2xx` status code, we treat it as a failure and retry.
+
+## Step 3 — Polling (fallback)
+
+Polling exists as a **recovery and verification mechanism**. Webhooks are the recommended primary delivery channel.
+
+### Use cases for polling
+
+- The webhook delivery failed all 4 attempts and you need to recover the result.
+- You want to verify the data in the webhook matches what's actually on our side (defence-in-depth).
+- Your client cannot receive webhooks at all (no public URL, behind NAT) — in which case async is still useful for the "submit and check later" pattern, you just rely on polling for delivery.
+- You want to reconcile what was charged across a recent batch.
+
+### Endpoint
+
+```http
+GET https://api.zebratruth.ai/v1/compliance/jobs/{jobId}
+Authorization: Bearer {api_key}
+```
+
+### Recommended cadence
+
+**First poll at 30 seconds, then every 30 seconds.** Most fast-mode checks complete in 60–110 seconds; full-mode in 90–240 seconds.
+
+The polling endpoint enforces a hard floor: a minimum of 5 seconds between polls per `(tenantId, jobId)`. Polls faster than that get `429` with `Retry-After` guidance.
+
+### Response shapes
+
+While the job is in flight (`queued` or `running`):
+
+```json
+{
+  "jobId": "job_dd1928e710aa4e16",
+  "status": "running",
+  "createdAt": "2026-05-01T03:00:00.000Z",
+  "startedAt": "2026-05-01T03:00:00.020Z",
+  "callbackId": "my-internal-id-456"
+}
+```
+
+Once `completed`:
+
+```json
+{
+  "jobId": "job_dd1928e710aa4e16",
+  "status": "completed",
+  "createdAt": "...",
+  "startedAt": "...",
+  "completedAt": "2026-05-01T03:01:33.702Z",
+  "callbackId": "my-internal-id-456",
+  "result": { /* same shape as the webhook payload's `data` field */ }
+}
+```
+
+If `failed`:
+
+```json
+{
+  "jobId": "...",
+  "status": "failed",
+  "completedAt": "...",
+  "error": {
+    "message": "...",
+    "code": "pipeline_error"
+  }
+}
+```
+
+### Tenant scoping
+
+A request for a `jobId` that doesn't belong to the authenticated tenant returns `404 Job not found`. Job existence is never leaked across tenants.
+
+### After 90 days
+
+Job rows and their report blobs are retained for 90 days. After that:
+
+- The polling endpoint returns `410 Gone` if the row's still there but the report blob has been pruned.
+- The polling endpoint returns `404 Not Found` if the row itself has been swept.
+
+## Streaming an in-flight async job
+
+If you submitted with `responseMode: "async"` but later want a live progress feed, open an SSE connection to:
+
+```http
+GET https://api.zebratruth.ai/v1/compliance/jobs/{jobId}/stream
+Authorization: Bearer {api_key}
+Accept: text/event-stream
+```
+
+This emits a synthetic `job.queued` or `job.started` event on connect, then the terminal `complete` or `error` event when the job reaches that state. Live per-agent events (`agent.started` / `agent.completed`) are **not** replayed — for full per-agent streaming, use `responseMode: "stream"` from the start.
+
+The resume stream times out after 4 minutes; if reached it emits an `error` event with code `stream_timeout` and closes. Recover by polling the GET endpoint.
+
+## Operational notes
+
+- **Function timeout ceiling.** Each async job runs inside a Vercel function with a 300-second `maxDuration`. Jobs that exceed it (extremely long full-mode runs with all jurisdictions and platforms) may be killed mid-orchestration, leaving the row in `running` until a sweeper flips it to `failed` with code `vercel_timeout`. We're working on a queue-backed worker for unbounded async — talk to us if you hit this.
+- **Idempotency.** Pass an `Idempotency-Key` header on the POST to deduplicate retries safely.
+- **No queue priority yet.** Async jobs run as soon as the request arrives; there is no per-tier queue prioritisation.

@@ -5,60 +5,133 @@ description: Async delivery, HMAC security, retry policy
 
 # Webhooks
 
-Webhooks deliver compliance results asynchronously when using `responseMode: "async"`.
+Webhooks deliver compliance results asynchronously when the request uses `responseMode: "async"`. The webhook URL and a per-job signing secret are supplied with the original request and returned in the 202 response — no upfront endpoint registration is required.
 
-## Delivery Guarantees
+For a full submit → receive → verify walkthrough, see the [Async + Webhook Execution guide](/guides/async-webhook-execution).
 
-- **At-least-once delivery** with `eventId` for client-side deduplication
-- **HMAC signature**: `X-ZebraTruth-Signature: sha256=<hmac(secret, body)>`
-- **Replay protection**: `X-ZebraTruth-Timestamp` — reject if drift > 5 minutes
-- **Retry policy**: 3 attempts with exponential backoff (1s, 5s, 25s)
-- **Dead letter**: After 3 failures, moved to dead letter queue
+## Event types
 
-## Webhook Payload
+| Event | Fired on |
+|---|---|
+| `compliance.completed` | Successful end-to-end run, includes the full classified result |
+| `compliance.failed` | Pipeline failure or function timeout |
+
+## Delivery guarantees
+
+- **At-least-once delivery.** Use the top-level `eventId` to deduplicate on your side.
+- **HMAC signature** in the `X-ZebraTruth-Signature` header: `sha256=<hex(hmac(secret, body))>`.
+- **Replay protection.** `X-ZebraTruth-Timestamp` is an ISO 8601 timestamp; reject deliveries with drift greater than 5 minutes.
+- **Per-attempt timeout.** Each HTTP attempt has a 10-second timeout.
+- **Retry policy.** Up to 4 attempts (initial + 3 retries) with delays `1 s, 5 s, 25 s`. Total worst-case window: ~31 s.
+- **Dead-letter recording.** After exhaustion, the delivery is recorded with status `dead` in the internal delivery log.
+
+## Webhook payload
 
 ```json
 {
-  "eventId": "evt_abc123",
-  "event": "check.completed",
-  "jobId": "job_xyz789",
-  "callbackId": "my-project-456",
-  "timestamp": "2026-04-16T12:00:00Z",
+  "eventId": "evt_0971a7addc874ba7",
+  "event": "compliance.completed",
+  "jobId": "job_dd1928e710aa4e16",
+  "callbackId": "my-internal-id-456",
+  "timestamp": "2026-05-01T03:58:52.553Z",
   "version": 1,
   "data": {
-    "score": 85,
-    "decision": "PUBLISH",
-    "checks": [...],
-    "annotations": [...],
-    "versionInfo": {...},
-    "costBreakdown": {...}
+    "jobId": "job_dd1928e710aa4e16",
+    "score": 10,
+    "decision": "BLOCK",
+    "checks": [ /* ... */ ],
+    "checksById": { /* ... */ },
+    "indexes": { /* ... */ },
+    "annotations": [],
+    "profile": { /* ... */ },
+    "agentSummaries": { /* ... */ },
+    "versionInfo": { /* ... */ },
+    "creditsCharged": 12,
+    "cached": false,
+    "costBreakdown": { /* ... */ }
   }
 }
 ```
 
-## Verifying Signatures
+`callbackId` is the opaque tag you supplied on the original request — included so you can correlate the webhook with whatever record triggered it.
+
+## Headers on every delivery
+
+| Header | Example | Purpose |
+|---|---|---|
+| `Content-Type` | `application/json` | — |
+| `X-ZebraTruth-Event-Id` | `evt_0971a7addc874ba7` | Idempotency key for dedup |
+| `X-ZebraTruth-Timestamp` | `2026-05-01T03:58:52.553Z` | Replay protection |
+| `X-ZebraTruth-Signature` | `sha256=bbb03af377...` | HMAC over the raw request body |
+
+## Verifying a webhook
 
 ```javascript
-const crypto = require('crypto');
+import crypto from 'node:crypto'
 
-function verifyWebhook(body, signature, timestamp, secret) {
-  // Check timestamp freshness
+function verifyWebhook({ rawBody, headers, secret }) {
+  const signature = headers['x-zebratruth-signature']
+  const timestamp = headers['x-zebratruth-timestamp']
+  if (!signature || !timestamp) return false
+
+  // Reject deliveries more than 5 minutes off the wall clock
   if (Math.abs(Date.now() - new Date(timestamp).getTime()) > 5 * 60 * 1000) {
-    return false;
+    return false
   }
 
-  // Verify HMAC
-  const expected = crypto
+  const expected = 'sha256=' + crypto
     .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex');
+    .update(rawBody)
+    .digest('hex')
 
-  return `sha256=${expected}` === signature;
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected),
+  )
 }
 ```
 
-## Dead Letter Queue
+Always verify against the **raw bytes** of the body — re-stringifying parsed JSON breaks the HMAC even if the payload is semantically identical.
 
-Failed deliveries are queryable via `GET /v1/webhooks/deliveries?status=dead`.
+The `secret` is the `webhookSecret` returned in the 202 response when the job was submitted. Store it keyed by `jobId`. Each async job gets a fresh secret; secrets are not shared across jobs.
 
-See [Async Webhook guide](/guides/async-webhook-execution) for the full submit-then-poll flow.
+## Failed delivery and recovery
+
+If your webhook handler returns a non-2xx status (or the request times out), we retry with the schedule above. After all attempts fail, the result is still available via the [polling endpoint](/guides/async-webhook-execution#step-3-polling-fallback):
+
+```http
+GET /v1/compliance/jobs/{jobId}
+```
+
+Polling is the recovery / verification fallback. Use it to backfill missed webhooks or to confirm that a webhook payload matches what's actually in our system.
+
+You can also list dead-letter deliveries for the tenant:
+
+```http
+GET /v1/webhooks/deliveries?status=dead
+```
+
+## When the orchestrator fails
+
+A pipeline error fires `compliance.failed`:
+
+```json
+{
+  "event": "compliance.failed",
+  "jobId": "job_...",
+  "data": {
+    "jobId": "job_...",
+    "error": {
+      "message": "...",
+      "code": "pipeline_error"
+    }
+  }
+}
+```
+
+Common error codes:
+
+| `code` | Meaning |
+|---|---|
+| `pipeline_error` | An agent or sub-agent threw during the run |
+| `vercel_timeout` | Set by the stale-job sweeper when a run exceeded the function `maxDuration` ceiling without reaching a terminal state |
