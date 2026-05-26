@@ -16,7 +16,8 @@ ZebraTruth uses a pipeline of specialized AI agents, each focused on a specific 
 | **Platform Policy** | `platform-policy` | 2 | Text | YouTube, Instagram, Facebook, TikTok, LinkedIn, Douyin, Weibo policies |
 | **Metadata & Labeling** | `metadata-labeling` | 3 | Text | C2PA Content Credentials, AI disclosure labels, machine-readable provenance |
 | **Rights Clearance (Text)** | `rights-clearance-text` | 3 | Text | Celebrity references, trademarks, copyrighted characters, music licensing, voice cloning |
-| **Rights Clearance (Image)** | `rights-clearance-image` | 3 | Image | Celebrity faces, logos, watermarks via computer vision |
+| **Rights Clearance (Image)** | `rights-clearance-image` | 3 | Image | Restricted categories (alcohol, weapons, tobacco, gambling, pharmaceuticals, financial products), content safety (adult / violence / racy), brand logos, stock-agency watermarks, C2PA metadata. See the [Restricted Categories guide](/guides/restricted-categories). |
+| **Video Compliance Check** | `compliance-check-video` | async | Video | Restricted categories, content safety, on-screen text (burned-in disclaimers, `#ad` labels), spoken-audio claims, brand logos, watermarks, AI provenance — orchestrated async pipeline via `POST /v1/compliance/check-video`. Findings carry timestamped `evidenceIds` and `timelineLocation` so clients can jump to the offending second. |
 | **Compliance Score** | `compliance-score` | 4 | All | Deterministic scoring from all checks |
 
 ## Pipeline Phases

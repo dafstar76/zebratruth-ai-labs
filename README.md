@@ -14,7 +14,8 @@ ZebraTruth provides compliance intelligence as a service. Your clients keep thei
 | **Advertising Law** | Claim substantiation, endorsement rules, targeting restrictions |
 | **Platform Policy** | YouTube, Instagram, Facebook, TikTok, LinkedIn AI disclosure and monetization rules |
 | **Rights Clearance (Text)** | Celebrity references, copyrighted characters, trademark usage |
-| **Rights Clearance (Image)** | Celebrity detection, logo/watermark detection, C2PA metadata |
+| **Rights Clearance (Image)** | Restricted categories, content safety, brand logos, stock watermarks, C2PA metadata |
+| **Video Compliance Check** | Restricted categories, content safety, on-screen text, audio claims, brand logos, watermarks (async pipeline) |
 | **Metadata & Labeling** | Content Credentials, machine-readable metadata, visible labels |
 | **Scoring** | Deterministic 0-100 score with PUBLISH / HOLD / BLOCK decision |
 
