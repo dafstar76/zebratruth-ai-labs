@@ -134,11 +134,10 @@ zebratruth-ai-labs/
 
 Credits-based billing. $1 of billed cost = 111 credits.
 
-| Plan | Price | Credits/mo | Rate Limit | Concurrent Load |
-|------|-------|-----------|-----------|-----------------|
-| Free | $0 | 1,332 lifetime | 10/min | 2 units |
-| Starter | $49.99/mo | 1,665/mo | 60/min | 8 units |
-| Pro | $199.99/mo | 6,660/mo | 300/min | 25 units |
+| Plan | Price | Credits | Rate Limit | Concurrent Load |
+|------|-------|---------|-----------|-----------------|
+| Free | $0 | 1,000 / 7-day trial | 10/min | 2 units |
+| Pro | $750/mo | 83,250/mo | 300/min | 25 units |
 | Enterprise | Custom | Custom | Custom | Custom |
 
 [Sign up at developers.zebratruth.ai](https://developers.zebratruth.ai)

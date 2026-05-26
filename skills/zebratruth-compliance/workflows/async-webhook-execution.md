@@ -126,7 +126,6 @@ If the check fails, webhook delivers:
 Jobs are processed in priority order by tier:
 1. Enterprise (highest)
 2. Pro
-3. Starter
-4. Free (lowest)
+3. Free (lowest)
 
 Job TTL is 1 hour. If not processed within that time, the job is moved to dead letter and the budget reservation is released.
