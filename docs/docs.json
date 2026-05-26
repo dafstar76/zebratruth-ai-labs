@@ -63,6 +63,7 @@
             "pages": [
               "guides/content-compliance-check",
               "guides/image-rights-clearance",
+              "guides/restricted-categories",
               "guides/streaming-integration",
               "guides/async-webhook-execution",
               "guides/individual-agents",

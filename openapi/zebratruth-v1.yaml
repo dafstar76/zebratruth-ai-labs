@@ -137,24 +137,31 @@ paths:
       operationId: checkImage
       summary: Check image rights
       description: |
-        Dedicated image rights clearance. Checks for celebrity faces, logos, watermarks,
-        trademarks, and C2PA metadata. Use this for image-only checks. For combined
-        text + image checks, use `/compliance/check` with `content.imageUrls`.
+        Dedicated image rights clearance. Checks for:
+
+        - **Restricted-category content** — six advertising-restricted categories: alcohol & spirits, weapons & firearms, tobacco & smoking, gambling, pharmaceuticals, financial products (incl. crypto / forex / investments). See the [Restricted Categories guide](/guides/restricted-categories) for the full catalog.
+        - **Content safety (ZebraSafety)** — adult / violence / racy / medical likelihood signals. Tiered: `(high confidence)` → `status: "block"`; `(medium confidence)` → `status: "flag"`.
+        - **Brand logo & stock-agency watermark detection** — trademarks and unlicensed-stock indicators.
+        - **C2PA / IPTC metadata** — Content Credentials, provenance, AI generation markers.
+        - **Known-person likeness** — right-of-publicity flag. *Surfaces only when the celebrity-detection provider is enabled in the deployment; not active in the default ZebraTruth-managed configuration today.*
+
+        Use this for image-only checks. For combined text + image checks, use `/compliance/check` with `content.imageUrls`.
 
         **Request formats.** Accepts either `application/json` (`imageUrls` referencing publicly
         accessible URLs) or `multipart/form-data` (upload up to 2 image binaries directly — use
         when you don't have a public URL handy). Total request body is capped at 4.5 MB.
 
         **Per-jurisdiction citations.** Citations on returned checks are composed from the laws
-        applicable to the jurisdictions you requested. A celebrity detection with
-        `jurisdictions: ["us"]` cites Cal. Civil Code § 3344 and NY Civil Rights Law; the same
-        detection with `jurisdictions: ["eu", "uk"]` cites European personality rights and UK
-        passing off. Trademark, copyright, and C2PA regulatory notes are similarly scoped.
+        applicable to the jurisdictions you requested AND the platform policies for the platforms
+        you requested. A restricted-category detection with `jurisdictions: ["us"]` cites the
+        federal regulator (e.g. FTC, FDA, SEC); the same detection with `jurisdictions: ["eu", "uk"]`
+        cites European directives and UK codes. Adding `platforms: ["facebook", "tiktok"]` appends
+        the corresponding platform-policy references.
 
-        **Check statuses.** Stock watermarks return `status: "block"` (hard fail — unlicensed
-        imagery); celebrity faces and brand logos return `status: "flag"` (review needed — may
-        be licensed). See the [Image Rights Clearance guide](/guides/image-rights-clearance)
-        for the full matrix.
+        **Check statuses.** Stock watermarks and high-severity restricted categories return
+        `status: "block"`; brand logos, medium-severity restricted categories, and medium-confidence
+        content-safety signals return `status: "flag"` (review). See the [Image Rights Clearance
+        guide](/guides/image-rights-clearance) for the full matrix.
 
         **Tenant scoping.** Every request is scoped to your account's subscribed jurisdictions
         and platforms. Requesting a jurisdiction or platform outside that set returns 403. See
@@ -1627,19 +1634,47 @@ components:
       properties:
         checks:
           type: array
+          description: All compliance checks emitted for the image(s). Each carries status, severity, message, recommendation, and citation.
           items:
             $ref: "#/components/schemas/ComplianceCheck"
         checksById:
           type: object
+          description: Same checks keyed by `id` for direct lookup.
           additionalProperties:
             $ref: "#/components/schemas/ComplianceCheck"
         indexes:
+          description: Inverted indexes (byStatus, bySeverity, byJurisdiction, byPlatform, byCategory) for convenient UI filtering.
           $ref: "#/components/schemas/CheckIndexes"
         annotations:
           type: array
+          description: image-region annotations with bounding boxes for detected elements, when the underlying detection produces one.
           items:
             $ref: "#/components/schemas/ComplianceAnnotation"
+        decision:
+          type: string
+          enum: [PUBLISH, HOLD, BLOCK]
+          description: |
+            Canonical compliance decision aggregated from check severities:
+            - `PUBLISH` — clean (green light)
+            - `HOLD` — review needed (yellow light)
+            - `BLOCK` — do not publish (red light)
+          example: BLOCK
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Compliance score (0–100, higher is better). Driven by aggregated check severities. Below 50 typically maps to `BLOCK`.
+          example: 22
+        cached:
+          type: boolean
+          description: Whether the result came from the request cache (identical inputs within the cache window).
+          example: false
+        creditsCharged:
+          type: number
+          description: Credits debited from the tenant balance for this request. Scales linearly with `imageCount` (35 credits per image).
+          example: 35
         costBreakdown:
+          description: Per-agent credit + latency breakdown.
           $ref: "#/components/schemas/CostBreakdown"
 
     AgentTrace:

@@ -11,6 +11,7 @@ agents: dynamic
 capabilities:
   - content-compliance-check
   - image-rights-clearance
+  - restricted-categories
   - multipart-image-upload
   - tenant-scoping
   - streaming-progressive-results
@@ -350,7 +351,8 @@ For detailed step-by-step procedures, read any of these workflow documents:
 |----------|-------------|
 | [tenant-onboarding-and-scoping.md](workflows/tenant-onboarding-and-scoping.md) | Onboarding model, 4 × 403 shapes and remediation |
 | [content-compliance-check.md](workflows/content-compliance-check.md) | Full compliance check (JSON + multipart) with all 3 response modes |
-| [image-rights-clearance.md](workflows/image-rights-clearance.md) | Check images for rights, celebrities, logos (JSON + multipart) |
+| [image-rights-clearance.md](workflows/image-rights-clearance.md) | Check images for restricted categories, content safety, logos, watermarks, C2PA (JSON + multipart) |
+| [restricted-categories.md](workflows/restricted-categories.md) | Six advertising-restricted categories (alcohol, weapons, tobacco, gambling, pharma, financial) with match labels and citation matrix |
 | [streaming-integration.md](workflows/streaming-integration.md) | Consume SSE stream for progressive results |
 | [async-webhook-execution.md](workflows/async-webhook-execution.md) | Submit-then-poll with webhook callbacks |
 | [individual-agents.md](workflows/individual-agents.md) | Invoke a single agent directly |

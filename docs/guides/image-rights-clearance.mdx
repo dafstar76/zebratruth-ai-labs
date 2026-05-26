@@ -5,7 +5,7 @@ description: Step-by-step guide
 
 # Image Rights Clearance
 
-Check images for celebrity faces, logos, watermarks, trademarks, and C2PA metadata.
+Check images for restricted-category content, brand logos, stock-agency watermarks, content safety signals, AI-generation provenance (C2PA / IPTC metadata), and known-person likeness.
 
 ## Endpoint
 
@@ -40,9 +40,12 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check-image \
 ## What It Checks
 
 1. **C2PA / IPTC metadata** — Content Credentials, provenance, AI generation markers
-2. **Celebrity detection** — Known public figures (AWS Rekognition)
-3. **Logo / watermark detection** — Brand logos, stock photo watermarks (Google Cloud Vision)
-4. **Deterministic risk aggregation** — Combines all detections into compliance checks
+2. **Restricted-category content** — Six advertising-restricted categories detected from image content: alcohol & spirits, weapons & firearms, tobacco & smoking, gambling, pharmaceuticals, and financial products (incl. crypto / forex / investments). Each carries jurisdiction-aware citations and platform-policy references. Full list and citation matrix in the [Restricted Categories guide](/guides/restricted-categories).
+3. **Content safety (ZebraSafety)** — adult / violence / racy / medical likelihood signals. Tiered: high-confidence detections produce `block` checks; medium-confidence produce `flag` checks for review. Medical content is surfaced as info-only (pharmaceutical-advertising rules may apply but it never auto-blocks).
+4. **Brand logo detection** — Recognized trademarks (Nike, Coca-Cola, etc.) — `flag` for review (could be fair use, comparative advertising, or authorized).
+5. **Stock-agency watermark detection** — Shutterstock, Getty, Adobe Stock, etc. — `block` (unlicensed stock imagery).
+6. **Known-person / celebrity likeness detection** — Right-of-publicity flag for recognizable public figures. *Surfaces when the celebrity-detection provider is enabled in your deployment; not active in the default ZebraTruth-managed configuration today.*
+7. **Deterministic risk aggregation** — Combines all detections into compliance checks with status (`pass | flag | block`), severity (`info | low | medium | high | critical`), and recommendation.
 
 ## Check Statuses
 
@@ -51,34 +54,33 @@ Not every detection is a hard block. The aggregator maps detections to statuses 
 | Detection | Status | Severity | Rationale |
 |-----------|--------|----------|-----------|
 | Stock-agency watermark (Shutterstock, Getty, etc.) | `block` | `critical` | Unlicensed stock imagery — high copyright liability |
-| Celebrity face | `flag` | `high` | Review: the person may be licensed, a paid spokesperson, or consented |
-| Brand logo | `flag` | `medium` | Review: could be nominative fair use, comparative advertising, or authorized |
-| C2PA credentials missing | `flag` | `medium` | Review: required by some jurisdictions/platforms but not universally |
-| AI-generation markers present (non-C2PA) | `flag` | `low` | Review: AI origin detected but C2PA credentials are preferred |
+| Restricted category — high severity (alcohol, weapons, tobacco, gambling) | `block` | `high` | Hard-restricted advertising category in most jurisdictions |
+| Restricted category — medium severity (pharmaceutical, financial-products) | `flag` | `medium` | Regulated advertising — substantiation and disclosure requirements |
+| Content safety — adult/violence/racy at high confidence | `block` | `high` | Platform-policy violation in most ad networks |
+| Content safety — adult/violence/racy at medium confidence | `flag` | `medium` | Review: may be intentional and permitted in context |
+| Content safety — medical content | `pass` | `info` | Informational only — surfaces pharmaceutical-rule applicability |
+| Known-person face *(when enabled)* | `flag` | `high` | Review: the person may be licensed, a paid spokesperson, or consented |
+| Brand logo | `flag` | `high` | Review: could be nominative fair use, comparative advertising, or authorized |
+| C2PA credentials missing | `flag` | `medium` | Required by some jurisdictions/platforms (EU AI Act, California SB 942, China Deep Synthesis Provisions, MeitY 2024) |
+| AI-generation markers present (non-C2PA) | `pass` | `info` | AI origin documented in metadata |
 | C2PA credentials present | `pass` | `info` | Verified, with generator and assertion details |
+| No AI-generation markers found | `flag` | `high` | Image's origin cannot be verified from metadata |
 
-Treat `flag` as "human review needed," not "reject." Use the `recommendation` field to
-drive the reviewer's next step.
+Treat `flag` as "human review needed," not "reject." Use the `recommendation` field to drive the reviewer's next step.
 
 ## Per-Jurisdiction Citations
 
-Citations on returned checks are composed from the laws applicable to the jurisdictions
-you requested. Ask for `["us"]` and you get US citations; ask for `["us", "eu", "uk"]`
-and you get a semicolon-joined list covering all three.
+Citations on returned checks are composed from the laws applicable to the jurisdictions you requested. Ask for `["us"]` and you get US citations; ask for `["us", "eu", "uk"]` and you get a semicolon-joined list covering all three. Platform-specific policy citations (Meta, TikTok, YouTube, X) are appended based on requested platforms.
 
-**Example — celebrity detection across different jurisdiction sets:**
+**Example — same restricted-category detection across different request scopes:**
 
-| Request jurisdictions | Citation on `celebrity-detected` check |
-|-----------------------|----------------------------------------|
-| `["us"]`              | `Cal. Civil Code § 3344; NY Civil Rights Law §§ 50-51; Tennessee ELVIS Act` |
-| `["eu"]`              | `EU member-state image/personality rights (e.g. German Allgemeines Persönlichkeitsrecht, French droit à l'image)` |
-| `["uk"]`              | `UK passing off (common law); Trade Marks Act 1994` |
-| `["us", "eu", "uk"]`  | All three, joined by `; ` |
+| Request scope | Citation on `Restricted Category: Alcohol & spirits` check |
+|---|---|
+| `jurisdictions: ["us"]`, `platforms: []` | `27 U.S.C. § 213 (Federal Alcohol Administration Act); FTC alcohol self-regulation guides; state alcohol-board rules (e.g. California ABC, NY SLA)` |
+| `jurisdictions: ["us", "uk"]`, `platforms: ["facebook", "tiktok"]` | All US + UK regulatory citations, plus `Meta Advertising Standards — Alcohol; TikTok Advertising Policies — Alcohol` |
+| `jurisdictions: ["china"]`, `platforms: ["youtube"]` | `China Advertising Law Art. 23 (alcohol); SAMR enforcement; Google Ads Policies — Alcohol` |
 
-The same pattern applies to brand logos (trademark law) and stock watermarks
-(copyright law), and to the regulatory notes attached to the "No C2PA credentials"
-check (EU AI Act, California SB 942, China Deep Synthesis Provisions, etc. — only those
-relevant to the jurisdictions and platforms in the request).
+The same pattern applies to all check types — brand logos cite trademark law (Lanham Act, EU Trademark Regulation, etc.), stock watermarks cite copyright law, content-safety checks cite jurisdiction-specific decency / broadcasting / advertising codes plus platform policies.
 
 ## Response
 
@@ -86,39 +88,85 @@ relevant to the jurisdictions and platforms in the request).
 {
   "checks": [
     {
+      "id": "chk_87bdd543",
       "agentId": "rights-clearance-image",
-      "checkName": "Celebrity Detected: Taylor Swift",
-      "status": "flag",
+      "checkName": "Restricted Category: Alcohol & spirits",
+      "status": "block",
       "severity": "high",
-      "message": "Image contains a recognizable likeness of Taylor Swift (confidence: 94%). Right-of-publicity laws apply in the requested jurisdictions: us, eu.",
-      "recommendation": "Obtain a written talent release/license for commercial use of this person's likeness, or remove/replace the image.",
-      "citation": "Cal. Civil Code § 3344; NY Civil Rights Law §§ 50-51; Tennessee ELVIS Act; EU member-state image/personality rights (e.g. German Allgemeines Persönlichkeitsrecht, French droit à l'image)"
+      "message": "Image depicts Alcohol & spirits (detected label: liquor, 94% confidence). Restricted advertising category — alcohol marketing requires age-gating, jurisdictional licensing, and specific disclaimer language.",
+      "recommendation": "Block publication or obtain explicit clearance for alcohol & spirits advertising under the cited regulations and platform policies.",
+      "citation": "27 U.S.C. § 213 (Federal Alcohol Administration Act); FTC alcohol self-regulation guides; state alcohol-board rules; UK CAP Code Section 18 (Alcohol); Meta Advertising Standards — Alcohol; TikTok Advertising Policies — Alcohol",
+      "jurisdictions": ["us", "uk"],
+      "platforms": ["facebook", "tiktok"],
+      "primaryCategory": "other"
+    },
+    {
+      "id": "chk_ad1f2e90",
+      "agentId": "rights-clearance-image",
+      "checkName": "Adult Content Detected (high confidence)",
+      "status": "block",
+      "severity": "high",
+      "message": "Image safety analysis indicates a high likelihood of adult content in this image. Restricted advertising and platform-policy rules apply in the requested scope.",
+      "recommendation": "Block publication. Replace the image, or obtain explicit clearance for adult content under the cited regulations and platform policies.",
+      "citation": "FTC truth-in-advertising; COPPA (where child-directed); state adult-content statutes; Meta Community Standards — Adult Nudity & Sexual Activity; TikTok Community Guidelines — Sexual Behavior & Nudity",
+      "jurisdictions": ["us"],
+      "platforms": ["facebook", "tiktok"]
+    },
+    {
+      "id": "chk_ae6642b7",
+      "agentId": "rights-clearance-image",
+      "checkName": "No C2PA Content Credentials",
+      "status": "flag",
+      "severity": "medium",
+      "message": "Image does not contain C2PA content credentials. California SB 942 requires machine-readable AI provenance; TikTok uses C2PA for auto-detection of synthetic media; Meta auto-labels AI content via C2PA/IPTC metadata.",
+      "recommendation": "Embed C2PA content credentials before publication. Use Content Authenticity Initiative tools or Adobe Content Credentials.",
+      "citation": "California SB 942; TikTok Community Guidelines — Synthetic Media; Meta Transparency Center — Approach to AI-Generated Content"
     }
   ],
-  "annotations": [
-    {
-      "type": "image-region",
-      "agentId": "rights-clearance-image",
-      "severity": "high",
-      "message": "Image contains a recognizable likeness of Taylor Swift",
-      "imageLocation": {
-        "imageUrl": "https://example.com/ad-image.jpg",
-        "boundingBox": { "x": 120, "y": 45, "width": 200, "height": 250 }
-      }
-    }
-  ]
+  "checksById": { "chk_87bdd543": { /* same as above */ } },
+  "indexes": {
+    "byStatus": { "block": ["chk_87bdd543", "chk_ad1f2e90"], "flag": ["chk_ae6642b7"] },
+    "bySeverity": { "high": ["chk_87bdd543", "chk_ad1f2e90"], "medium": ["chk_ae6642b7"] },
+    "byJurisdiction": { "us": ["chk_87bdd543", "chk_ad1f2e90", "chk_ae6642b7"] },
+    "byPlatform": { "tiktok": ["chk_87bdd543", "chk_ad1f2e90", "chk_ae6642b7"] }
+  },
+  "annotations": [],
+  "decision": "BLOCK",
+  "score": 22,
+  "cached": false,
+  "creditsCharged": 35,
+  "costBreakdown": {
+    "totalCredits": 35,
+    "agents": [
+      { "agent": "rights-clearance-image", "creditsUsed": 35, "latencyMs": 714 }
+    ]
+  }
 }
 ```
 
+### Response field reference
+
+| Field | Type | Meaning |
+|---|---|---|
+| `checks` | array | All compliance checks emitted for the image(s). Each carries `status`, `severity`, `message`, `recommendation`, `citation`. |
+| `checksById` | object | Same checks keyed by `id` for direct lookup. |
+| `indexes` | object | Inverted indexes: `byStatus`, `bySeverity`, `byJurisdiction`, `byPlatform`, `byCategory` — convenient for UI filtering. |
+| `annotations` | array | `image-region` annotations with bounding boxes for detected elements (when available). |
+| `decision` | enum | Canonical decision: `PUBLISH` (clean) / `HOLD` (review) / `BLOCK` (do not publish). Driven by aggregating check severities. |
+| `score` | number | Compliance score 0–100. Higher is better. Below 50 typically means `BLOCK`. |
+| `cached` | boolean | Whether the result came from the request cache (identical inputs within the cache window). |
+| `creditsCharged` | number | Credits debited from your tenant balance for this request. |
+| `costBreakdown` | object | Per-agent credit + latency breakdown. |
+
 ## Cost
 
-~5 credits per image (Rekognition + Cloud Vision API calls).
+35 credits per image. Multi-image requests scale linearly (`35 × imageCount`). Tenant rate `$1 = 111 credits`, so one image ≈ $0.32.
 
 ## Notes
 
 - JSON path: images must be publicly accessible URLs
 - Multipart path: upload binaries directly, up to 2 per request, 4.5 MB total body
 - Maximum 2 images per request on both paths (hard cap)
-- Requests are scoped to your subscribed jurisdictions and platforms — see
-  [Tenant Onboarding and Scoping](/guides/tenant-onboarding-and-scoping) for the 403 model
-- Results include `image-region` annotations with bounding boxes for detected elements
+- Requests are scoped to your subscribed jurisdictions and platforms — see [Tenant Onboarding and Scoping](/guides/tenant-onboarding-and-scoping) for the 403 model
+- Results include `image-region` annotations with bounding boxes for detected elements (when the underlying detection produces one)
+- The restricted-categories list is admin-tunable in real time without a redeploy — see the [Restricted Categories guide](/guides/restricted-categories) for the full catalog and how to request additions for your account

@@ -28,7 +28,7 @@ Authorization: Bearer {api_key}
 | Fast mode text check | ~12 | All agents parallel |
 | Full mode text check | ~47 | 4-phase pipeline, thorough |
 | Single agent call | ~8-12 | 1 agent × 3 LLM stages |
-| Image rights check | ~5/image | CV pipeline (Rekognition + Vision) |
+| Image rights check | 35/image | Restricted categories, logos, watermarks, content safety, C2PA |
 | Cached check (same content) | 0 | Returns cached result |
 
 ## Cost Optimization Strategies
