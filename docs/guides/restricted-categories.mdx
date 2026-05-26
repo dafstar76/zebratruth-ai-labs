@@ -1,0 +1,150 @@
+---
+title: Restricted Categories
+description: Image content classification for advertising-restricted categories
+---
+
+# Restricted Categories
+
+The `/v1/compliance/check-image` endpoint detects image content belonging to six advertising-restricted categories and emits a dedicated compliance check for each match. Each check carries jurisdiction-aware regulatory citations and platform-policy references filtered to the request scope.
+
+## When a check fires
+
+The image is analyzed for recognizable objects/scenes. When a detected label maps to a restricted category (case-insensitive exact-word match against the category's `matchLabels`), a `Restricted Category: {categoryName}` check is emitted.
+
+Aggregation rules:
+
+- Multiple detected labels matching the **same category** → **one** check, using the highest-confidence label in the interpolated message
+- Detected labels below 50% confidence are ignored (most signal noise lives below this threshold)
+- Match is exact-word and case-insensitive: `"alcohol"` matches `"Alcohol"` and `"alcohol "` but **does NOT** match `"non-alcoholic"`
+
+## The six categories
+
+| Category | Severity | Status | Sample match labels |
+|---|---|---|---|
+| **Alcohol & spirits** | `high` | `block` | alcohol, wine, beer, whiskey, spirits, champagne, cocktail, vodka, rum, liquor |
+| **Weapons & firearms** | `high` | `block` | firearm, weapon, gun, rifle, pistol, ammunition, bullet, knife |
+| **Tobacco & smoking products** | `high` | `block` | tobacco, cigarette, cigar, vape, e-cigarette, smoking, smoker |
+| **Gambling** | `high` | `block` | casino, gambling, slot machine, poker chip, roulette, lottery, betting |
+| **Pharmaceutical & prescription drugs** | `medium` | `flag` | medicine, pill, pharmacy, drug, pharmaceutical, prescription, capsule |
+| **Financial products (incl. crypto, forex, investments)** | `medium` | `flag` | bitcoin, cryptocurrency, currency, investment, trading, stock market, forex, banking, loan, crypto, coin |
+
+`high`-severity categories produce a hard `block` decision. `medium`-severity categories produce a `flag` (review required) — typically for regulated content that's allowed with substantiation and disclosure.
+
+## Citations per category
+
+Each category carries per-jurisdiction citations (US / EU / UK / China / India) and per-platform citations (Facebook, Instagram, TikTok, YouTube). Only those matching the request scope are included on the emitted check.
+
+### Alcohol & spirits
+
+| Scope | Citations |
+|---|---|
+| **us** | 27 U.S.C. § 213 (Federal Alcohol Administration Act); FTC alcohol self-regulation guides; state alcohol-board rules (e.g. California ABC, NY SLA) |
+| **eu** | EU AVMSD Art. 9 (commercial communications for alcoholic beverages); EU Council Recommendation 2001/458/EC |
+| **uk** | UK CAP Code Section 18 (Alcohol); ASA enforcement |
+| **china** | China Advertising Law Art. 23 (alcohol); SAMR enforcement |
+| **india** | India Cable Television Networks Rules Rule 7(2)(viii); Drugs and Cosmetics Act 1940 (surrogate-advertising provisions) |
+| **facebook** / **instagram** | Meta Advertising Standards — Alcohol |
+| **tiktok** | TikTok Advertising Policies — Alcohol |
+| **youtube** | Google Ads Policies — Alcohol |
+
+### Weapons & firearms
+
+| Scope | Citations |
+|---|---|
+| **us** | ATF firearms-advertising regulations; state firearms-marketing statutes |
+| **eu** | EU member-state firearms-advertising restrictions |
+| **uk** | UK Firearms Act 1968; CAP Code Rule 11 (Distance Selling) |
+| **china** | China Firearms Control Law Art. 5 |
+| **india** | India Arms Act 1959 |
+| **facebook** / **instagram** | Meta Advertising Standards — Weapons, ammunition & explosives |
+| **tiktok** | TikTok Advertising Policies — Weapons & explosives |
+| **youtube** | Google Ads Policies — Dangerous products or services |
+
+### Tobacco & smoking products
+
+| Scope | Citations |
+|---|---|
+| **us** | Family Smoking Prevention and Tobacco Control Act (FSPTCA); FDA tobacco advertising rules; state tobacco-control laws |
+| **eu** | EU Tobacco Advertising Directive 2003/33/EC; TPD 2014/40/EU |
+| **uk** | UK Tobacco Advertising and Promotion Act 2002 |
+| **china** | China Advertising Law Art. 22 (tobacco advertising ban) |
+| **india** | India COTPA 2003 (Cigarettes and Other Tobacco Products Act) |
+| **facebook** / **instagram** | Meta Advertising Standards — Tobacco & related products |
+| **tiktok** | TikTok Advertising Policies — Tobacco products |
+| **youtube** | Google Ads Policies — Tobacco |
+
+### Gambling
+
+| Scope | Citations |
+|---|---|
+| **us** | State gaming-commission rules (NJ DGE, NV GCB, etc.); Wire Act; UIGEA |
+| **eu** | EU member-state gambling regulators (French ANJ, Spanish DGOJ, etc.); EU Commission gambling recommendations |
+| **uk** | UK Gambling Act 2005; CAP Code Section 16; Gambling Commission rules |
+| **china** | China Criminal Law Art. 303 (gambling prohibition) |
+| **india** | India Public Gambling Act 1867; state lottery laws |
+| **facebook** / **instagram** | Meta Advertising Standards — Online gambling & gaming |
+| **tiktok** | TikTok Advertising Policies — Gambling |
+| **youtube** | Google Ads Policies — Gambling and games |
+
+### Pharmaceutical & prescription drugs
+
+| Scope | Citations |
+|---|---|
+| **us** | FDA prescription-drug advertising rules (21 CFR § 202); FTC self-regulation for OTC drugs |
+| **eu** | EU Directive 2001/83/EC Art. 86–100 (medicinal-product advertising); EMA guidelines |
+| **uk** | UK Human Medicines Regulations 2012 Part 14; PMCPA Code of Practice |
+| **china** | China Advertising Law Art. 15–18 (medical advertising); SAMR enforcement |
+| **india** | India Drugs and Magic Remedies (Objectionable Advertisements) Act 1954 |
+| **facebook** / **instagram** | Meta Advertising Standards — Online pharmacies |
+| **tiktok** | TikTok Advertising Policies — Drugs, drug-related products |
+| **youtube** | Google Ads Policies — Healthcare and medicines |
+
+### Financial products (incl. crypto, forex, investments)
+
+| Scope | Citations |
+|---|---|
+| **us** | SEC marketing rule (Rule 206(4)-1); FINRA Rule 2210 (communications with the public); CFTC commodity-advertising rules; state Blue Sky laws |
+| **eu** | EU MiFID II; ESMA marketing-communications guidelines; MiCA crypto-asset-markets marketing rules |
+| **uk** | UK FCA Financial Promotion regime (FSMA s.21); FCA crypto-promotion rules (PS23/6) |
+| **china** | China Advertising Law Art. 25 (financial-product advertising); PBOC and CBIRC rules |
+| **india** | India SEBI Investment Adviser Regulations; RBI advertising guidelines |
+| **facebook** / **instagram** | Meta Advertising Standards — Financial products & services |
+| **tiktok** | TikTok Advertising Policies — Financial services |
+| **youtube** | Google Ads Policies — Financial products & services |
+
+## Example response check
+
+When an image of a wine bottle is checked with `jurisdictions: ["us", "uk"]` and `platforms: ["facebook", "tiktok"]`:
+
+```json
+{
+  "id": "chk_87bdd543",
+  "agentId": "rights-clearance-image",
+  "checkName": "Restricted Category: Alcohol & spirits",
+  "status": "block",
+  "severity": "high",
+  "message": "Image depicts Alcohol & spirits (detected label: liquor, 94% confidence). Restricted advertising category — alcohol marketing requires age-gating, jurisdictional licensing, and specific disclaimer language.",
+  "recommendation": "Block publication or obtain explicit clearance for alcohol & spirits advertising under the cited regulations and platform policies.",
+  "citation": "27 U.S.C. § 213 (Federal Alcohol Administration Act); FTC alcohol self-regulation guides; state alcohol-board rules (e.g. California ABC, NY SLA); UK CAP Code Section 18 (Alcohol); ASA enforcement; Meta Advertising Standards — Alcohol; TikTok Advertising Policies — Alcohol",
+  "jurisdictions": ["us", "uk"],
+  "platforms": ["facebook", "tiktok"]
+}
+```
+
+The `message` interpolates `{{category}}` (categoryName), `{{label}}` (the highest-confidence matched label, lower-cased), and `{{confidence}}` (integer 0–100).
+
+## Notes on extensibility
+
+The category list, match labels, severity, message template, and citation maps are **admin-tunable in real time** — stored in Azure Storage and edited without a code deploy. Changes propagate within 60 seconds via a cached loader. Contact your account team to request:
+
+- New categories specific to your industry (e.g. supplements, CBD, political content)
+- Adjustments to the match-label list for an existing category
+- Per-tenant severity overrides
+
+If the Azure-managed table is unreachable for any reason, the runtime falls back to the in-repo manifest (currently the 6 categories above), so image checks never break on a transient outage.
+
+## Related
+
+- [Image Rights Clearance](/guides/image-rights-clearance) — the parent endpoint and full check catalog
+- [Interpreting Reports](/guides/interpreting-reports) — how `decision`, `score`, and `severity` interact
+- [Tenant Onboarding and Scoping](/guides/tenant-onboarding-and-scoping) — how `jurisdictions` and `platforms` filter the citation set
