@@ -12,12 +12,12 @@ Authorization: Bearer {api_key}
 **Response:**
 ```json
 {
-  "creditsRemaining": 1420,
-  "creditsTotal": 1665,
-  "creditsUsedThisMonth": 245,
+  "creditsRemaining": 82500,
+  "creditsTotal": 83250,
+  "creditsUsedThisMonth": 750,
   "periodStart": "2026-04-01",
   "periodEnd": "2026-04-30",
-  "tier": "starter"
+  "tier": "pro"
 }
 ```
 
@@ -42,9 +42,8 @@ Authorization: Bearer {api_key}
 
 | Plan | Price | Credits/mo | Rate Limit |
 |------|-------|-----------|-----------|
-| Free | $0 | 1,332 lifetime | 10/min |
-| Starter | $49.99/mo | 1,665/mo | 60/min |
-| Pro | $199.99/mo | 6,660/mo | 300/min |
+| Free | $0 | 1,000 / 7-day trial | 10/min |
+| Pro | $750/mo | 83,250/mo | 300/min |
 | Enterprise | Custom | Custom | Custom |
 
 ## Reading Cost Breakdowns

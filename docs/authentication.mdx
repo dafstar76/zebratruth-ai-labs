@@ -40,10 +40,10 @@ curl https://api.zebratruth.ai/v1/whoami \
 ```json 200 — Valid Key
 {
   "tenantId": "tenant_abc",
-  "tier": "starter",
-  "creditsRemaining": 1420,
-  "creditsTotal": 1665,
-  "rateLimitPerMinute": 60
+  "tier": "pro",
+  "creditsRemaining": 82500,
+  "creditsTotal": 83250,
+  "rateLimitPerMinute": 300
 }
 ```
 
@@ -94,7 +94,6 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 | Tier | Requests/min | Concurrent Load Units |
 |------|-------------|----------------------|
 | Free | 10 | 2 |
-| Starter | 60 | 8 |
 | Pro | 300 | 25 |
 | Enterprise | Custom | Custom |
 

@@ -1102,7 +1102,7 @@ components:
           example: 1420
         creditsTotal:
           type: number
-          example: 1665
+          example: 83250
         creditsUsedThisMonth:
           type: number
           example: 245
