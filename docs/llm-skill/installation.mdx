@@ -7,14 +7,41 @@ description: Install the ZebraTruth compliance skill in your LLM agent
 
 ## Claude Code
 
-```bash
-claude plugin install zebratruth-compliance@zebratruth-ai-labs
+Two steps inside the Claude Code session — both are required, in order:
+
+**Step 1.** Register the ZebraTruth AI Labs marketplace (only needed once per machine):
+```
+/plugin marketplace add dafstar76/zebratruth-ai-labs
 ```
 
-Then set your API key:
+**Step 2.** Install the compliance plugin:
+```
+/plugin install zebratruth-compliance@zebratruth-ai-labs
+```
+
+Verify the install:
+```
+/plugin list
+```
+You should see `zebratruth-compliance` in the output.
+
+Then set your API key in the shell that launches Claude Code (the env var is read at session start):
 ```bash
 export ZEBRATRUTH_API_KEY=zt_live_your_key_here
 ```
+
+If Claude Code is already running, restart the session so it picks up the env var.
+
+### Autonomous-agent install (agent driving Claude Code on a customer's behalf)
+
+Run these two slash commands sequentially via your agent's command-execution interface, then ensure `ZEBRATRUTH_API_KEY` is in the environment before Claude Code starts:
+
+```
+/plugin marketplace add dafstar76/zebratruth-ai-labs
+/plugin install zebratruth-compliance@zebratruth-ai-labs
+```
+
+The marketplace-add step is required — skipping it produces `Marketplace 'zebratruth-ai-labs' not found`.
 
 ## OpenClaw
 
@@ -26,13 +53,21 @@ openclaw gateway restart
 
 ## Manual Integration
 
-For any LLM platform that supports markdown injection:
+For any LLM platform (or autonomous agent) that supports markdown injection:
 
-1. Download [SKILL.md](https://github.com/dafstar76/zebratruth-ai-labs/blob/master/skills/zebratruth-compliance/SKILL.md)
+1. Download [SKILL.md](https://raw.githubusercontent.com/dafstar76/zebratruth-ai-labs/master/skills/zebratruth-compliance/SKILL.md) — this is the **raw** URL, suitable for both browser download and `curl`/`wget`:
+   ```bash
+   curl -O https://raw.githubusercontent.com/dafstar76/zebratruth-ai-labs/master/skills/zebratruth-compliance/SKILL.md
+   ```
 2. Include it in the LLM's system prompt or context
 3. Set `ZEBRATRUTH_API_KEY` in the environment
 
 The LLM will automatically learn how to authenticate, run checks, and interpret results.
+
+The 9 workflow documents listed below live alongside `SKILL.md` under the same directory pattern, so an agent that needs one can fetch it on demand:
+```bash
+curl -O https://raw.githubusercontent.com/dafstar76/zebratruth-ai-labs/master/skills/zebratruth-compliance/workflows/{workflow-name}.md
+```
 
 ## Workflow Documents
 
