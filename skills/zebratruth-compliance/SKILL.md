@@ -352,6 +352,7 @@ For detailed step-by-step procedures, read any of these workflow documents:
 | [tenant-onboarding-and-scoping.md](workflows/tenant-onboarding-and-scoping.md) | Onboarding model, 4 × 403 shapes and remediation |
 | [content-compliance-check.md](workflows/content-compliance-check.md) | Full compliance check (JSON + multipart) with all 3 response modes |
 | [image-rights-clearance.md](workflows/image-rights-clearance.md) | Check images for restricted categories, content safety, logos, watermarks, C2PA (JSON + multipart) |
+| [video-compliance-check.md](workflows/video-compliance-check.md) | Async video check (3-step upload → check → poll). Frame-level evidence with timeline locations + signed webhook delivery. |
 | [restricted-categories.md](workflows/restricted-categories.md) | Six advertising-restricted categories (alcohol, weapons, tobacco, gambling, pharma, financial) with match labels and citation matrix |
 | [streaming-integration.md](workflows/streaming-integration.md) | Consume SSE stream for progressive results |
 | [async-webhook-execution.md](workflows/async-webhook-execution.md) | Submit-then-poll with webhook callbacks |
@@ -383,6 +384,11 @@ For detailed step-by-step procedures, read any of these workflow documents:
 | `/v1/agents/{agentId}` | POST | Invoke single agent |
 | `/v1/compliance/check` | POST | Run compliance check (sync/stream/async) |
 | `/v1/compliance/check-image` | POST | Image rights clearance |
+| `/v1/compliance/media/upload-url` | POST | Mint SAS upload URL for video bytes |
+| `/v1/compliance/check-video` | POST | Submit video for async compliance analysis (returns 202 + jobId) |
+| `/v1/compliance/check-video/{requestId}` | GET | Poll video job status + retrieve inlined report when terminal |
+| `/v1/compliance/webhooks/video/secret` | GET | Auto-create + retrieve tenant video webhook signing secret |
+| `/v1/compliance/webhooks/video/secret/rotate` | POST | Rotate the video webhook signing secret |
 | `/v1/compliance/jobs/{jobId}` | GET | Poll async job status |
 | `/v1/policies/sources` | GET | Available compliance sources |
 | `/v1/policies/status` | GET | Tenant's activated sources |
