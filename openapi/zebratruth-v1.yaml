@@ -34,6 +34,11 @@ tags:
     description: Retrieve and replay compliance reports
   - name: Observability
     description: Request logs and webhook delivery status
+  - name: Video Compliance
+    description: |
+      Async compliance analysis for video content. Upload a video, submit a check,
+      poll for the report. Includes tenant-level webhook signing-secret management
+      for verifying delivery callbacks.
 
 paths:
   /whoami:
@@ -479,6 +484,235 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /compliance/media/upload-url:
+    post:
+      operationId: createVideoUploadUrl
+      summary: Mint a video upload URL
+      description: |
+        Returns a tenant-scoped, short-lived (15 min) SAS URL the client uses
+        to PUT video bytes **directly to blob storage** — bypassing the API
+        for the upload itself. The returned `requestId` is the handle for the
+        subsequent `POST /compliance/check-video` call.
+
+        **Why direct upload?** Videos can be up to 200 MB. Streaming them
+        through the API endpoint would add latency, double bandwidth costs,
+        and hit serverless function timeout limits. Direct-to-blob upload
+        is the same pattern used by S3, GCS, and Azure for large files.
+
+        **Allowed content types:** `video/mp4`, `video/webm`, `video/quicktime`.
+        The duration limits (3–180s) and file-size cap (200 MB) are enforced
+        by the subsequent `check-video` call's probe step — not at upload time.
+
+        **The PUT must include the returned `uploadInstructions.headers`
+        verbatim** (they carry ownership tags + the Azure `x-ms-blob-type` header).
+      tags: [Video Compliance]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VideoUploadUrlRequest"
+      responses:
+        "200":
+          description: Upload URL minted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoUploadUrlResponse"
+        "400":
+          description: Invalid contentType (must be video/mp4 | video/webm | video/quicktime)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/InsufficientCredits"
+        "403":
+          $ref: "#/components/responses/TenantScopeDenied"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /compliance/check-video:
+    post:
+      operationId: runVideoComplianceCheck
+      summary: Submit a video for compliance analysis
+      description: |
+        Submits an uploaded video (referenced by `requestId` + `blobPath` from
+        a prior `POST /compliance/media/upload-url`) for compliance analysis.
+        **Asynchronous** — returns 202 immediately with a `jobId`. Poll
+        `GET /compliance/check-video/{requestId}` for status + the inlined
+        report when terminal, OR set `webhookUrl` to receive a signed callback.
+
+        **Required:** `jurisdictions` + `platforms` (mirror text/image checks —
+        same canonical codes, e.g. `["us", "eu"]`, `["youtube", "instagram"]`).
+        Inputs are canonicalized (trim + lowercase + sort) before storage and
+        hashed — case-only differences are treated as the same request.
+
+        **Idempotency.** The request is keyed on
+        `(blobPath, feature, inputHash)`. Re-posting with the same `requestId`
+        AND the same inputs returns 202 with `idempotent: true`. Different
+        inputs on the same `requestId` returns 409 `idempotency_conflict`
+        with `reason` set to the field that differs.
+
+        **Billing.** Credits are reserved at submit time
+        (`estimatedCredits` returned). They are committed when the job
+        completes with a real report, OR released for `insufficient_evidence`
+        / `analysis_failed` / poison-queue failures — tenants only pay for
+        valid reports.
+
+        **Latency.** Typical: 8–30 seconds for a 5–30s video. Longer videos
+        and dense-content frames take proportionally longer.
+      tags: [Video Compliance]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VideoCheckRequest"
+      responses:
+        "202":
+          description: Job accepted + queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoCheckAcceptedResponse"
+        "400":
+          description: |
+            Validation failure. Common `data.code` values:
+              - `blob_path_invalid` — blobPath doesn't start with `videos/{tenantId}/{requestId}/`
+              - `unsupported_mode` — only `fast` is supported in V1
+              - `video_too_short` / `duration_out_of_range` — duration outside [3, 180]s
+              - `blob_not_found` — uploadUrl PUT didn't complete or blob expired
+              - `blob_ownership_mismatch` — blob tags don't match the request's tenantId/requestId
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/InsufficientCredits"
+        "403":
+          $ref: "#/components/responses/TenantScopeDenied"
+        "409":
+          description: Idempotency conflict — same requestId reused with different inputs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdempotencyConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: Probe service temporarily unavailable — retry shortly
+        "503":
+          description: Video analysis temporarily disabled — retry later
+
+  /compliance/check-video/{requestId}:
+    get:
+      operationId: getVideoCheckStatus
+      summary: Poll video job status + retrieve report
+      description: |
+        Returns the current state of a video compliance job. When the job is
+        terminal (`status: completed | failed`), the full `report` payload is
+        inlined in the response — no extra fetch needed.
+
+        **Polling cadence:** every 2 seconds is recommended; the engine has a
+        3-minute upper bound on a single job's worker time.
+
+        **`reportFetchFailed`.** Blob storage is eventually-consistent — a
+        read immediately after the worker completes can occasionally miss.
+        Rather than 500, the response surfaces `reportFetchFailed: true` so
+        the client can retry the same endpoint shortly.
+
+        **Tenant scoping.** A `requestId` belonging to a different tenant
+        returns 404 (no info leak about another tenant's jobs).
+      tags: [Video Compliance]
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The requestId returned by `POST /compliance/check-video`
+          example: "82b68316-ed85-489c-991e-2ff0f2b95f29"
+      responses:
+        "200":
+          description: Current status + report (when terminal)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoCheckStatusResponse"
+        "400":
+          description: Missing or malformed requestId
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No video compliance job for this tenant + requestId
+
+  /compliance/webhooks/video/secret:
+    get:
+      operationId: getVideoWebhookSecret
+      summary: Retrieve the tenant's video webhook signing secret
+      description: |
+        Returns the tenant-level HMAC signing secret used to sign outbound
+        video webhook payloads. **Auto-creates the secret on the first call**
+        and persists it — subsequent calls return the same value.
+
+        **Verification.** Use this secret in your webhook receiver to verify
+        the `x-zt-webhook-signature` header on each delivery:
+        ```
+        signature == HMAC_SHA256(secret,
+          "POST" + "\n" + url + "\n" + timestamp + "\n" + sha256(body))
+        ```
+        The signature is computed once at delivery enqueue and stays
+        stable across all retries for a given delivery — so your verifier
+        sees the same signature regardless of which attempt arrives.
+
+        **One-time visibility.** This is the ONLY surface that returns the
+        secret. It never appears in `POST /compliance/check-video` responses
+        or anywhere else. Treat it like an API key; store it in your
+        secret manager.
+      tags: [Video Compliance]
+      responses:
+        "200":
+          description: Secret retrieved (or just-created on first call)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoWebhookSecretResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Tenant not found
+
+  /compliance/webhooks/video/secret/rotate:
+    post:
+      operationId: rotateVideoWebhookSecret
+      summary: Rotate the tenant's video webhook signing secret
+      description: |
+        Generates a brand-new tenant-level webhook signing secret, replacing
+        any existing value. Returns the new secret in the response (the only
+        time it is exposed).
+
+        **Important — in-flight deliveries are unaffected.** Each delivery's
+        HMAC signature is computed at enqueue time and stored on the delivery
+        record, so retries for already-queued webhooks continue to verify
+        against the OLD secret. **New** jobs sign with the new secret.
+
+        **Update your verifier immediately.** After rotation, your receiver
+        must accept the NEW secret on the next job's webhook. Most receivers
+        accept both old + new during a brief grace window — recommended.
+      tags: [Video Compliance]
+      responses:
+        "200":
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoWebhookSecretRotateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Tenant not found
+
   /version:
     get:
       operationId: getVersion
@@ -531,7 +765,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/TenantScopeDenied"
         "429":
           $ref: "#/components/responses/RateLimited"
 
@@ -642,7 +876,7 @@ components:
                 example: "Insufficient credits"
               data:
                 type: object
-                description: Per-error context, attached via Nitro `createError({ data: ... })`.
+                description: "Per-error context, attached via Nitro `createError({ data: ... })`."
                 properties:
                   creditsRemaining:
                     type: number
@@ -733,7 +967,7 @@ components:
                 example: "Rate limit exceeded"
               data:
                 type: object
-                description: Per-error context, attached via Nitro `createError({ data: ... })`.
+                description: "Per-error context, attached via Nitro `createError({ data: ... })`."
                 properties:
                   retryAfter:
                     type: integer
@@ -1773,3 +2007,364 @@ components:
         status:
           type: string
           enum: [pending, delivered, failed, dead]
+
+    # ─── Video Compliance ────────────────────────────────────────────────
+
+    VideoUploadUrlRequest:
+      type: object
+      required: [contentType]
+      properties:
+        contentType:
+          type: string
+          description: MIME type of the video being uploaded
+          enum: [video/mp4, video/webm, video/quicktime]
+          example: video/mp4
+
+    VideoUploadUrlResponse:
+      type: object
+      required: [uploadUrl, blobPath, requestId, requiredTags, uploadInstructions]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+          description: |
+            Short-lived (15 min) SAS URL. PUT the raw video bytes here using
+            the headers from `uploadInstructions`. Do NOT add auth headers.
+          example: https://zebratruthstorage.blob.core.windows.net/videos/.../source.mp4?...sig=...
+        blobPath:
+          type: string
+          description: Pass this verbatim as `blobPath` in the subsequent `POST /compliance/check-video`.
+          example: videos/kp_abc123.../82b68316-.../source.mp4
+        requestId:
+          type: string
+          description: |
+            Unique handle for this upload. Pass it verbatim as `requestId` in the
+            subsequent `POST /compliance/check-video` AND use it to poll
+            `GET /compliance/check-video/{requestId}` afterward.
+          example: 82b68316-ed85-489c-991e-2ff0f2b95f29
+        requiredTags:
+          type: object
+          description: |
+            Azure blob index tags that the SAS URL enforces at upload time.
+            Already encoded in `uploadInstructions.headers` — present here for
+            inspection / debugging only.
+          properties:
+            tenantId:
+              type: string
+            requestId:
+              type: string
+            kind:
+              type: string
+              enum: [video]
+        uploadInstructions:
+          type: object
+          required: [method, headers]
+          properties:
+            method:
+              type: string
+              enum: [PUT]
+            headers:
+              type: object
+              description: Headers the client MUST include on the PUT to `uploadUrl`. Include verbatim.
+              additionalProperties:
+                type: string
+
+    VideoCheckRequest:
+      type: object
+      required: [requestId, blobPath, jurisdictions, platforms]
+      properties:
+        requestId:
+          type: string
+          description: The `requestId` returned from `POST /compliance/media/upload-url`.
+          example: 82b68316-ed85-489c-991e-2ff0f2b95f29
+        blobPath:
+          type: string
+          description: The `blobPath` returned from `POST /compliance/media/upload-url`.
+          example: videos/kp_abc123.../82b68316-.../source.mp4
+        jurisdictions:
+          type: array
+          description: |
+            Canonical jurisdiction codes scoped to your account's subscription.
+            Inputs are canonicalized (trim + lowercase + sort) before hashing —
+            case-only differences are treated as the same request.
+          items:
+            type: string
+          example: [us, eu]
+          minItems: 1
+        platforms:
+          type: array
+          description: Canonical platform codes scoped to your account's subscription.
+          items:
+            type: string
+            enum: [youtube, instagram, facebook, tiktok, linkedin]
+          example: [youtube, instagram]
+          minItems: 1
+        mode:
+          type: string
+          description: Execution mode. V1 supports `fast` only.
+          enum: [fast]
+          default: fast
+        webhookUrl:
+          type: string
+          format: uri
+          description: |
+            Optional callback URL. When set, a signed POST is delivered when the
+            job reaches a terminal status. Requires you to have configured a
+            webhook signing secret via `GET /compliance/webhooks/video/secret`.
+          example: https://your-app.example.com/webhooks/zebratruth
+        callbackId:
+          type: string
+          maxLength: 256
+          description: |
+            Opaque tag echoed back in the 202 response and the webhook payload.
+            Use it to correlate jobs with your internal records.
+
+    VideoCheckAcceptedResponse:
+      type: object
+      required: [jobId, status, estimatedCredits]
+      properties:
+        jobId:
+          type: string
+          description: Same value as the request's `requestId`. Use it to poll status.
+          example: 82b68316-ed85-489c-991e-2ff0f2b95f29
+        status:
+          type: string
+          enum: [queued]
+        estimatedCredits:
+          type: integer
+          description: Credits reserved for this job. Committed on success or released on insufficient_evidence / analysis_failed.
+          example: 50
+        callbackId:
+          type: string
+          description: Echoed verbatim from the request when provided.
+        idempotent:
+          type: boolean
+          description: |
+            Present + `true` when this request matched an existing job with the
+            same `(requestId, blobPath, feature, inputHash)`. No additional
+            credits reserved.
+
+    VideoCheckStatusResponse:
+      type: object
+      required: [requestId, tenantId, status]
+      properties:
+        requestId:
+          type: string
+        tenantId:
+          type: string
+        status:
+          type: string
+          description: |
+            Public 4-state contract. `queued` + `processing` mean the worker is
+            in-flight (continue polling). `completed` + `failed` are terminal.
+          enum: [queued, processing, completed, failed, unknown]
+        phase:
+          type: string
+          description: |
+            Internal worker phase name (e.g. `transcribeAudio`, `analyzeFrames`, `done`).
+            Useful for showing live progress UI. Not part of the stability contract —
+            new phases may be added without notice.
+        reportStatus:
+          type: string
+          description: Terminal status of the analysis. Absent until terminal.
+          enum: [complete, insufficient_evidence, analysis_failed]
+        billingStatus:
+          type: string
+          description: Reservation lifecycle. Absent until the worker resolves billing.
+          enum: [reserved, committed, released]
+        workerCompletedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+          description: Total worker pipeline duration in milliseconds.
+        error:
+          type: string
+          description: Failure reason. Present when status is `failed`.
+        reportBlobPath:
+          type: string
+          description: Path to the persisted report.json in blob storage. Informational — content is inlined in `report`.
+        report:
+          $ref: "#/components/schemas/VideoReport"
+        reportFetchFailed:
+          type: boolean
+          description: |
+            Present + `true` when the row is terminal but the report blob could
+            not be fetched (eventually-consistent storage edge). Retry the same
+            endpoint in 1-2 seconds.
+
+    VideoReport:
+      type: object
+      description: The contents of the persisted report.json blob, inlined into status responses.
+      required: [schemaVersion, preprocessorVersion, evidenceVersion, tenantId, requestId, generatedAt, status, checks, preprocessing]
+      properties:
+        schemaVersion:
+          type: string
+          enum: [video-report.v1]
+        preprocessorVersion:
+          type: string
+          enum: [video-preprocessor.v1]
+        evidenceVersion:
+          type: string
+          enum: [evidence-timeline.v1]
+        tenantId:
+          type: string
+        requestId:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [complete, insufficient_evidence, analysis_failed]
+        reason:
+          type: string
+          description: Failure / no-evidence reason. Present when status is not `complete`.
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/VideoComplianceCheck"
+        analysisDiagnostics:
+          type: array
+          description: Pipeline diagnostics (boundary-validation drops, evidence truncation, etc.). Empty for clean runs.
+          items:
+            $ref: "#/components/schemas/AnalysisDiagnostic"
+        detections:
+          description: Raw vision-detection signals (logos, OCR, labels, safe-search). Forensic only.
+        preprocessing:
+          type: object
+          required: [transcriptionStatus, frameAnalysisStatus, degraded, evidenceTruncated]
+          properties:
+            transcriptionStatus:
+              type: string
+              enum: [complete, skipped, failed]
+            frameAnalysisStatus:
+              type: string
+              enum: [ok, partial, failed]
+            degraded:
+              type: boolean
+              description: True when any diagnostic was emitted.
+            evidenceTruncated:
+              type: boolean
+              description: True when the evidence renderer hit a size ceiling.
+
+    VideoComplianceCheck:
+      description: |
+        Same shape as `ComplianceCheck` (text/image) with two optional
+        video-mode fields. Frame-level deterministic findings (logos,
+        on-screen text, restricted-category labels) carry `evidenceIds` +
+        `timelineLocation`; broader LLM-derived findings may omit them.
+      allOf:
+        - $ref: "#/components/schemas/ComplianceCheck"
+        - type: object
+          properties:
+            evidenceIds:
+              type: array
+              description: Stable evidence IDs this check cites. Pattern `<track>_NNN` where track is `audio`, `frame`, `ocr`, or `signal`.
+              items:
+                type: string
+                pattern: '^(audio|frame|ocr|signal)_\d+$'
+              example: [frame_007, ocr_012]
+            timelineLocation:
+              $ref: "#/components/schemas/VideoTimelineLocation"
+
+    VideoTimelineLocation:
+      type: object
+      required: [startMs, endMs, track]
+      properties:
+        startMs:
+          type: integer
+          minimum: 0
+          description: Start of the evidence range in milliseconds from video start.
+        endMs:
+          type: integer
+          minimum: 0
+          description: End of the evidence range (>= startMs). Equal to startMs for instant signals.
+        track:
+          type: string
+          description: |
+            Which video track the evidence lives on. Sub-source granularity
+            (frame vs ocr vs signal) lives in `evidenceIds`.
+          enum: [audio, video, mixed]
+
+    AnalysisDiagnostic:
+      type: object
+      description: |
+        First-class pipeline diagnostic. Surfaces non-compliance signals like
+        renderer overflow or boundary-validation drops without polluting
+        the compliance findings array.
+      required: [code, message, severity]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable code (e.g. `evidence_truncated`, `video_check_missing_evidence_ids`).
+          example: evidence_truncated
+        message:
+          type: string
+          description: Human-readable explanation.
+        severity:
+          type: string
+          enum: [info, warning, error]
+        evidenceIds:
+          type: array
+          items:
+            type: string
+
+    VideoWebhookSecretResponse:
+      type: object
+      required: [secret, justGenerated, createdAt]
+      properties:
+        secret:
+          type: string
+          description: HMAC signing secret. Format `whsec_<48 lowercase hex>`. Store in your secret manager — this is the only surface that returns it.
+          pattern: '^whsec_[0-9a-f]{48}$'
+          example: whsec_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
+        justGenerated:
+          type: boolean
+          description: True on the first-ever call for this tenant. False on every subsequent read.
+        createdAt:
+          type: string
+          format: date-time
+
+    VideoWebhookSecretRotateResponse:
+      type: object
+      required: [secret, rotatedAt, previousSecretExisted]
+      properties:
+        secret:
+          type: string
+          description: The NEW signing secret. The old one is invalidated for any future jobs (in-flight deliveries keep using their pre-stored signature).
+          pattern: '^whsec_[0-9a-f]{48}$'
+        rotatedAt:
+          type: string
+          format: date-time
+        previousSecretExisted:
+          type: boolean
+          description: False on first-ever rotation (functionally identical to auto-create on first GET).
+
+    IdempotencyConflictResponse:
+      type: object
+      description: |
+        Returned by `POST /compliance/check-video` 409 when the same
+        `requestId` is reused with different inputs. The conflicting field
+        is reported in `reason`; precedence is `blobPath` → `feature` → `inputHash`.
+      required: [error, code, reason]
+      properties:
+        error:
+          type: boolean
+          example: true
+        code:
+          type: string
+          enum: [idempotency_conflict]
+        reason:
+          type: string
+          enum: [blobPath, feature, inputHash]
+          description: Which field differed between the existing and incoming request.
+        existing:
+          type: string
+          description: The value stored on the existing job row.
+        incoming:
+          type: string
+          description: The value submitted in this request.
