@@ -148,7 +148,6 @@ Credits-based billing. $1 of billed cost = 111 credits.
 - [Developer Portal](https://developers.zebratruth.ai) — Sign up, API keys, usage dashboard
 - [API Documentation](https://developers.zebratruth.ai/docs) — Full endpoint reference
 - [Status Page](https://status.zebratruth.ai) — System status and uptime
-- [ZebraTruth Studio](https://zebratruthai.vercel.app) — Reference implementation (video editor with compliance)
 
 ## License
 
