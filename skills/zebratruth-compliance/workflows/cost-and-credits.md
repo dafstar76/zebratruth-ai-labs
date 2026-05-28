@@ -55,16 +55,14 @@ Every response includes `costBreakdown`:
   "totalCredits": 47,
   "agents": [
     { "agent": "jurisdiction", "stage": "A", "credits": 2, "cached": true },
-    { "agent": "jurisdiction", "stage": "B", "credits": 3 },
-    { "agent": "jurisdiction", "stage": "C", "credits": 8 }
+    { "agent": "jurisdiction", "stage": "C", "credits": 11 }
   ]
 }
 ```
 
 - `cached: true` — Research stage hit the cache (0 provider cost)
 - Stage A = legal research & citation retrieval (cacheable, 30-day TTL)
-- Stage B = risk interpretation against the specific content
-- Stage C = structured compliance composition
+- Stage C = compliance composition + severity scoring
 
 ## Handling 402 (Insufficient Credits)
 

@@ -894,7 +894,7 @@ components:
     ComplianceCheckMultipartRequest:
       type: object
       description: |
-        Flat-field multipart form (Stripe/OpenAI-style). Send `jurisdictions` and `platforms`
+        Flat-field multipart form. Send `jurisdictions` and `platforms`
         as repeated fields (one value per occurrence) — NOT as JSON arrays or comma-separated
         strings. The multipart path is sync-only: `responseMode`, `webhookUrl`, and
         `callbackId` are ignored. Cache is bypassed when `image` parts are present.
