@@ -1,15 +1,180 @@
 ---
 title: Video Compliance
-description: Run async compliance checks on uploaded video files
+description: How ZebraTruth analyzes video — async pipeline, evidence IDs, the report schema
 ---
 
-# Video Compliance
+# Video Compliance — Concept
 
-ZebraTruth supports native video compliance checks through `POST /v1/compliance/check-video`.
+ZebraTruth runs compliance checks on video ads through a **server-side async pipeline**. Your client uploads the video, submits a job, and either polls or receives a webhook when the report is ready. No client-side ffmpeg, no preprocessing, no transcript provisioning — ZebraTruth handles everything.
 
-No client-side ffmpeg is required. Upload the video with `POST /v1/compliance/media/upload-url`, submit the returned `blobPath`, then poll `GET /v1/compliance/check-video/{requestId}` for timestamped findings.
+<Card title="Primary endpoint" icon="video" href="/guides/video-compliance-check">
+  **POST `https://api.zebratruth.ai/v1/compliance/check-video`**
 
-<Card title="Video Compliance Check" icon="video" href="/guides/video-compliance-check">
-  Follow the upload, submit, poll, and webhook flow for video files.
+  Full step-by-step guide with curl, Node, and Python examples →
 </Card>
 
+## Why video is async
+
+Video compliance is heavy compute. A 60-second ad goes through:
+
+1. **ffprobe** — validate container, codec, duration, audio presence
+2. **ffmpeg audio extraction** — pull 16kHz mono PCM WAV
+3. **whisper-1 transcription** — segment-level timestamps, multilingual
+4. **Frame sampling** — scene-change-aware, max 20 frames (transcript-aware second pass biases toward frames near spoken claims)
+5. **Google Cloud Vision per-frame batch** — LOGO + TEXT + LABEL + SAFE_SEARCH in one batched call
+6. **Deterministic check aggregation** — brand/watermark/restricted-category/OCR-keyword across frames, deduplicated within 30s windows
+7. **Stage A→C compliance reasoning** — 5 LLM agents (ai-laws, advertising-law, platform-policy, metadata-labeling, rights-clearance) run in parallel against the full evidence timeline
+
+Total: ~20-60 seconds for a 30-second video, ~60-180s for a 3-minute video. Sync would require holding the HTTP connection — unworkable for production reliability.
+
+## Endpoint family
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/v1/compliance/media/upload-url` | POST | Get a signed Azure Blob upload URL (15-min TTL) |
+| `/v1/compliance/check-video` | POST | Submit for analysis (returns 202 with `jobId` + `estimatedCredits`) |
+| `/v1/compliance/check-video/{requestId}` | GET | Poll for status + inlined report |
+| `/v1/compliance/webhooks/video/secret` | GET | Get/create your tenant's webhook signing secret |
+| `/v1/compliance/webhooks/video/secret/rotate` | POST | Rotate the secret (in-flight deliveries keep old signature) |
+
+## The 3-step flow
+
+```
+1. Get upload URL    ──→  2. PUT video bytes  ──→  3. POST check-video  ──→  4. Poll or webhook
+   (1 round-trip)        (direct to blob)        (returns 202 + jobId)     (status: completed)
+```
+
+See [Quickstart](/quickstart) or the [full guide](/guides/video-compliance-check) for working curl commands at each step.
+
+## Evidence IDs — how findings cite the source
+
+Every check in the report carries an `evidenceIds[]` array referencing stable IDs from the evidence timeline:
+
+| ID format | What it cites |
+|---|---|
+| `audio_NNN` | A transcript segment from the audio track (sentence-level) |
+| `frame_NNN` | A sampled video frame (with timestamp) |
+| `ocr_NNN` | A specific OCR detection within a frame |
+| `signal_NNN` | A controlled-vocab signal (brand, watermark, restricted category, regulatory disclosure) |
+
+Plus every check carries a `timelineLocation`:
+
+```json
+{
+  "startMs": 4500,
+  "endMs": 7200,
+  "track": "audio"
+}
+```
+
+So findings always pin to a specific moment in the source video, enabling timestamped UI annotations in your video editor.
+
+## VideoComplianceCheck schema
+
+```typescript
+interface VideoComplianceCheck {
+  agentId: "ai-laws" | "advertising-law" | "platform-policy" | "metadata-labeling" | "rights-clearance" | "rights-clearance-image"
+  checkName: string
+  status: "pass" | "flag" | "block" | "escalate"
+  severity: "info" | "low" | "medium" | "high" | "critical"
+  message: string
+  recommendation?: string
+  citation?: string
+  primaryCategory?: string
+  categories?: string[]
+  // Video-mode required fields:
+  evidenceIds: string[]
+  timelineLocation: {
+    startMs: number
+    endMs: number
+    track: "audio" | "video" | "mixed"
+  }
+}
+```
+
+Checks that fail to populate `evidenceIds` or `timelineLocation` are **dropped + emitted as `analysisDiagnostics`** — never leaked as fake compliance findings. Enforced at the Stage C boundary.
+
+## Report envelope
+
+```typescript
+interface VideoReport {
+  schemaVersion: "video-report.v1"
+  preprocessorVersion: "video-preprocessor.v1"
+  evidenceVersion: "evidence-timeline.v1"
+  tenantId: string
+  requestId: string
+  generatedAt: string
+  status: "complete" | "insufficient_evidence" | "analysis_failed"
+  reason?: string
+  checks: VideoComplianceCheck[]
+  analysisDiagnostics?: AnalysisDiagnostic[]
+  preprocessing: {
+    transcriptionStatus: string
+    frameAnalysisStatus: string
+    degraded: boolean
+    evidenceTruncated: boolean
+  }
+}
+```
+
+The 3 terminal report statuses:
+
+| `status` | Meaning | Billing |
+|---|---|---|
+| `complete` | Stage A→C ran, real findings produced | Committed (charged) |
+| `insufficient_evidence` | Pipeline ran but no meaningful content to analyze (silent video, no OCR, no signals) | Released (no charge) |
+| `analysis_failed` | Engine error — failure recorded for audit | Released (no charge) |
+
+## Limits
+
+| | |
+|---|---|
+| Duration | 3 to 180 seconds |
+| File size | 200 MB |
+| Content types | `video/mp4`, `video/webm`, `video/quicktime` |
+| Frame sample cap | 20 frames per video (scene-change-aware + claim-aware) |
+| Mode | `fast` (V1 only — full pipeline) |
+
+## What it detects
+
+ZebraTruth's video compliance checks span 5 specialized agents:
+
+| Agent | Detects |
+|---|---|
+| **AI Laws** | Jurisdiction applicability (FTC, EU UCPD, UK ASA, India ASCI, China Ad Law) + AI disclosure rules |
+| **Advertising Law** | Unsubstantiated claims, missing disclaimers, comparative ad rules, endorsement / influencer marketing rules |
+| **Platform Policy** | TikTok, YouTube, Instagram, Meta, LinkedIn AI-disclosure + monetization rules |
+| **Metadata & Labeling** | Required visible labels, watermarks, C2PA metadata |
+| **Rights Clearance** | Brand logos, restricted-category content safety (alcohol/tobacco/firearm/gambling/pharmaceutical), watermarks, regulatory disclosure presence |
+
+Plus deterministic checks emitted by the per-frame analysis (brand-detected, watermark-detected, restricted-label, safesearch-flag, regulatory-disclosure) that don't require LLM calls.
+
+## Webhooks vs polling
+
+**Polling** is the default. Poll `GET /v1/compliance/check-video/{requestId}` every 2 seconds. Stop when `status` is `completed` or `failed`.
+
+**Webhooks** are recommended for production. Submit with `webhookUrl` set, configure a tenant signing secret via `/v1/compliance/webhooks/video/secret`, and receive HMAC-signed POSTs with stable signatures across retries (5 attempts, exponential backoff 0/1m/5m/15m/1h).
+
+See [Async + Webhooks](/guides/async-webhook-execution) for HMAC verification.
+
+## Idempotency
+
+Submitting `POST /v1/compliance/check-video` with the same `(requestId, blobPath, jurisdictions, platforms, mode)` tuple returns 202 with `idempotent: true` — no extra charge. Different inputs with the same `requestId` return 409 `idempotency_conflict`.
+
+## Cost
+
+Per-second pricing. 10 credits/second (V1 default). A 60-second video costs ~600 credits (≈$5.41 at the current $1 = 111 credits rate). Sub-3-second videos are floored at 30 credits (3-second minimum).
+
+See [Cost & Credits](/guides/cost-and-credits) for the math + tier multipliers.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Run a video check now" icon="play" href="/guides/video-compliance-check">
+    Full step-by-step guide.
+  </Card>
+
+  <Card title="Async + Webhooks" icon="bell" href="/guides/async-webhook-execution">
+    HMAC verification, retry semantics, replay protection.
+  </Card>
+</CardGroup>

@@ -1,76 +1,114 @@
 ---
-title: "Introduction"
-description: "AI-powered compliance context layer for GenAI agents"
+title: "Compliance for AI-generated video"
+description: "Async compliance checks for video ads. Per-frame OCR + transcript analysis, timestamped violations, platform-specific rules. Built for ad agencies and creators."
 ---
 
-# Welcome to ZebraTruth AI
+# Compliance Checks for Video
 
-ZebraTruth AI provides **Compliance Intelligence as a Service**. You keep your video editors, content pipelines, workflows and creative tools. ZebraTruth's AI agents are embedded into your content creation workflows and return structured compliance results with **annotations that map directly to your UI**. 
+ZebraTruth runs **structured compliance audits on AI-generated video ads**. Upload a video, get back timestamped findings against FTC, EU UCPD, UK ASA, platform-specific rules (TikTok, YouTube, Meta), and rights clearance — without writing any client-side video processing code.
 
-Instant compliance checks are proactive and take place within your creation, upstream of production, instead of passive post-production checks. Full audit report to help you make your AI content deliverable and legally defensible.
+<Card title="The video compliance endpoint" icon="video" href="/guides/video-compliance-check">
+  **POST `https://api.zebratruth.ai/v1/compliance/check-video`**
 
-## What ZebraTruth AI Does
+  3-step async flow: get an upload URL → upload your video → poll for results. No client-side ffmpeg. No file size hassle (up to 200 MB). Returns timestamped findings citing the exact `audio_NNN`, `frame_NNN`, `ocr_NNN`, or `signal_NNN` evidence ID.
+</Card>
+
+<Note>
+  Built for **ad agencies + creators** running automated pre-publish compliance gates on TikTok / YouTube / Meta ads. Per-second pricing — pay only for what you analyze.
+</Note>
+
+## Why Video Compliance is Different
+
+| | Server-side | Async | Per-frame analysis |
+|---|---|---|---|
+| **Video** | ✅ Full pipeline | ✅ Required (probe + transcribe + GCV) | ✅ OCR + brand + signal per frame |
+| Image | ✅ Multipart | ❌ Sync | Single image |
+| Text | ✅ JSON | ❌ Sync | N/A |
+
+Video runs server-side because the pipeline is heavy: ffprobe → ffmpeg audio extraction → whisper-1 transcription → frame sampling (scene-change-aware, max 20 frames) → Google Cloud Vision (OCR + labels + logos + safesearch) → Stage A→C compliance reasoning. Pay-per-second pricing means you spend nothing on overhead.
+
+## What ZebraTruth Detects in Video
 
 <CardGroup cols={2}>
-  <Card title="Jurisdiction Detection" icon="scale-balanced">
-    Detects applicable laws — FTC, EU UCPD, UK ASA, India ASCI, China Advertising Law
+  <Card title="Per-frame OCR + brand detection" icon="image">
+    Burned-in disclaimers, on-screen claims, brand logos, watermarks. Every frame analyzed and cited by stable `ocr_NNN` / `frame_NNN` evidence ID.
   </Card>
 
-  <Card title="Advertising Law" icon="gavel">
-    Checks claim substantiation, endorsement rules, targeting restrictions
+  <Card title="Audio transcript analysis" icon="microphone">
+    Spoken claims transcribed with second-precision timestamps. Citations link findings to specific `audio_NNN` segments.
   </Card>
 
-  <Card title="Platform Policy" icon="mobile-screen">
-    YouTube, Instagram, Facebook, TikTok, LinkedIn AI disclosure and monetization rules
+  <Card title="Platform-specific rules" icon="mobile-screen">
+    TikTok, YouTube, Instagram, Facebook, LinkedIn AI-disclosure + monetization rules. Returns timestamped violations.
   </Card>
 
-  <Card title="Rights Clearance" icon="user-shield">
-    Celebrity detection, trademark usage, logo detection, C2PA metadata
+  <Card title="Jurisdiction detection" icon="scale-balanced">
+    FTC, EU UCPD, UK ASA, India ASCI, China Advertising Law — applied based on the markets you specify per video.
   </Card>
 
-  <Card title="Embeddable Annotations" icon="highlighter">
-    Text spans, video timestamps, and image regions that map to your UI
+  <Card title="Restricted categories" icon="ban">
+    Alcohol, tobacco, firearms, gambling, pharma — flagged with evidence linkage to the frames/segments that triggered them.
   </Card>
 
-  <Card title="Deterministic Scoring" icon="chart-simple">
-    0-100 score with PUBLISH / HOLD / BLOCK decisions
+  <Card title="Deterministic scoring" icon="chart-simple">
+    Every video gets a 0-100 score + PUBLISH / HOLD / BLOCK decision based on severity + applicability + jurisdiction weighting.
   </Card>
 </CardGroup>
 
-## How It Works
+## Three-Step Async Flow
 
-1. **Send content** — POST your ad script, images, or upload video files through the API
-2. **Agents analyze** — 20\+ specialized AI agents check against laws, platforms, and rights
-3. **Get results** — Structured report with score, checks, and UI-embeddable annotations
-4. **Fix and re-check** — Iterate until the decision is PUBLISH
+```bash
+# Step 1 — get an upload URL
+curl -X POST https://api.zebratruth.ai/v1/compliance/media/upload-url \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"contentType": "video/mp4"}'
 
-## Native Video Checks
+# Step 2 — upload your video to the returned uploadUrl
 
-ZebraTruth supports async compliance checks for uploaded video files through `POST /v1/compliance/check-video`.
-Your client does not need ffmpeg: upload the video with `POST /v1/compliance/media/upload-url`, submit the returned `blobPath`, and retrieve timestamped findings with `GET /v1/compliance/check-video/{requestId}`.
+# Step 3 — submit for analysis (returns 202 with requestId)
+curl -X POST https://api.zebratruth.ai/v1/compliance/check-video \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestId": "<your-uuid>",
+    "blobPath": "<from step 1>",
+    "jurisdictions": ["us", "eu"],
+    "platforms": ["tiktok", "youtube"],
+    "mode": "fast"
+  }'
 
-<Card title="Run a Video Compliance Check" icon="video" href="/guides/video-compliance-check">
-  Upload, submit, poll, and receive webhook callbacks for video compliance analysis.
+# Step 4 — poll for results
+curl https://api.zebratruth.ai/v1/compliance/check-video/<requestId> \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+```
+
+<Card title="Full step-by-step guide →" icon="video" href="/guides/video-compliance-check">
+  Detailed examples in curl, Node, Python. Error handling, webhook setup, billing semantics.
 </Card>
 
-## Three Ways to Integrate
+## Get Started
 
-<CardGroup cols={3}>
-  <Card title="REST API" icon="code" href="/quickstart">
-    Direct HTTP calls from any language. Sync, streaming, or async with webhooks.
+<CardGroup cols={2}>
+  <Card title="Quickstart (Video)" icon="play" href="/quickstart">
+    Run your first video compliance check in 2 minutes.
+  </Card>
+
+  <Card title="Video Compliance Concept" icon="lightbulb" href="/video">
+    Why video is async, the pipeline architecture, the schema.
   </Card>
 
   <Card title="LLM Skill" icon="robot" href="/llm-skill/overview">
-    Drop SKILL.md into any AI agent's context. No SDK needed.
+    Install the ZebraTruth skill into Claude Code, OpenClaw, or any LLM agent so your agent can run video compliance checks autonomously.
   </Card>
 
-  <Card title="Code Examples" icon="terminal" href="https://github.com/dafstar76/zebratruth-ai-labs/tree/master/examples">
-    Node.js, Python, and cURL examples ready to run.
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Full OpenAPI schema — every endpoint, request, response.
   </Card>
 </CardGroup>
 
-## Next Steps
+---
 
-<Card title="Quick Start" icon="rocket" href="/quickstart">
-  Get your API key and run your first compliance check in under 2 minutes.
-</Card>
+<Note>
+  **Other content types:** ZebraTruth also runs compliance on [single images](/concepts/other-content-types) (sync) and [text/ad copy](/concepts/other-content-types) (sync). Most customers use the video endpoint — see [Other Content Types](/concepts/other-content-types) for image + text references.
+</Note>

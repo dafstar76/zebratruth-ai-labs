@@ -1,25 +1,29 @@
 ---
-title: Quick Start
-description: Run your first compliance check in under 2 minutes
+title: Quickstart
+description: Run your first video compliance check in 2 minutes
 ---
 
-# Quick Start
+# Run a Video Compliance Check
 
-## 1. Get Your API Key
+End-to-end in 2 minutes: get an API key, upload a video, get back timestamped findings.
+
+<Note>
+  This walks through the **video** endpoint (`POST /v1/compliance/check-video`) — the primary ZebraTruth product. For [image](/concepts/other-content-types) or [text](/concepts/other-content-types) compliance, see Other Content Types.
+</Note>
+
+## 1. Get your API key
 
 Sign up at [developers.zebratruth.ai](https://developers.zebratruth.ai) and create an API key.
-Set it as an environment variable:
 
 ```bash
 export ZEBRATRUTH_API_KEY=zt_live_your_key_here
 ```
 
 <Note>
-  Test keys (`zt_test_...`) return deterministic sandbox responses with no credit cost.
-  Use them for development and integration testing.
+  Test keys (`zt_test_...`) return deterministic sandbox responses with no credit cost. Use them for development and integration testing.
 </Note>
 
-## 2. Validate Your Key
+## 2. Validate your key
 
 ```bash
 curl https://api.zebratruth.ai/v1/whoami \
@@ -29,179 +33,179 @@ curl https://api.zebratruth.ai/v1/whoami \
 ```json Response
 {
   "tenantId": "kp_a269d9695f734329a216669410731a21",
-  "tier": "free",
+  "tier": "pro",
   "authType": "apikey",
-  "scopes": ["compliance:check", "agents:*", "reports:read", "policies:read"],
-  "rateLimit": 10
+  "scopes": ["compliance:check", "agents:*", "reports:read", "policies:read"]
 }
 ```
 
-<Note>
-  Credit balance isn't on `/whoami` — it comes from `GET /v1/usage`. That keeps `/whoami`
-  cheap for frequent auth-validation polling.
-</Note>
+## 3. Request a video upload URL
 
-## 3. Complete Onboarding (Required)
-
-Every compliance request is scoped to the **jurisdictions** and **platforms** you
-subscribed to during onboarding. If you skip this step, the API returns 403 with
-the message:
-
-> `Tenant not onboarded. Complete setup at https://developers.zebratruth.ai before using the API.`
-
-Complete onboarding at [developers.zebratruth.ai](https://developers.zebratruth.ai) —
-pick your default jurisdictions (from `us`, `eu`, `uk`, `india`, `china`) and
-platforms (from `youtube`, `instagram`, `facebook`, `tiktok`, `linkedin`). You can
-update these later from the dashboard. See the
-[Tenant Onboarding and Scoping guide](/guides/tenant-onboarding-and-scoping)
-for the full model.
-
-## 4. Run a Text Compliance Check
+The video pipeline is fully server-side. No client-side ffmpeg, no preprocessing — your client just gets a signed upload URL, PUTs the bytes, and submits.
 
 ```bash
-curl -X POST https://api.zebratruth.ai/v1/compliance/check \
-  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{
-    "jurisdictions": ["us", "eu"],
-    "platforms": ["youtube", "instagram"],
-    "content": {
-      "text": "Try our guaranteed weight loss solution! Celebrity-endorsed results."
-    },
-    "mode": "fast",
-    "responseMode": "sync"
-  }'
-```
-
-<Note>
-  **Uploading an image binary instead of a URL?** Use `multipart/form-data`:
-
-  ```bash
-  curl -X POST https://api.zebratruth.ai/v1/compliance/check \
-    -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
-    -H "Idempotency-Key: $(uuidgen)" \
-    -F "text=Try our guaranteed weight loss solution!" \
-    -F "image=@./ad.png" \
-    -F "jurisdictions=us" -F "jurisdictions=eu" \
-    -F "platforms=youtube" -F "platforms=instagram" \
-    -F "mode=fast"
-  ```
-
-  Repeat `jurisdictions`, `platforms`, and `image` for each value (up to 2 images,
-  4.5 MB total body). Multipart is sync-only — no streaming or webhooks.
-</Note>
-
-## Run a Video Compliance Check
-
-ZebraTruth also accepts native video files. Video checks are async: upload the video, submit the returned `blobPath`, then poll for a timestamped report.
-
-<Note>
-  No client-side ffmpeg is required. ZebraTruth handles probing, audio transcription, frame extraction, OCR, visual signals, and compliance analysis server-side.
-</Note>
-
-```bash
-# 1. Create a video upload URL
 curl -X POST https://api.zebratruth.ai/v1/compliance/media/upload-url \
   -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"contentType":"video/mp4"}'
-
-# 2. PUT your video bytes to the returned uploadUrl using the returned headers
-# 3. Submit the uploaded blob for analysis
-curl -X POST https://api.zebratruth.ai/v1/compliance/check-video \
-  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{
-    "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
-    "blobPath": "videos/tenant_abc/82b68316-ed85-489c-991e-2ff0f2b95f29/source.mp4",
-    "jurisdictions": ["us"],
-    "platforms": ["youtube"],
-    "mode": "fast"
-  }'
-
-# 4. Poll until status is completed or failed
-curl https://api.zebratruth.ai/v1/compliance/check-video/82b68316-ed85-489c-991e-2ff0f2b95f29 \
-  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+  -d '{"contentType": "video/mp4"}'
 ```
-
-<Card title="Video Compliance Guide" icon="video" href="/guides/video-compliance-check">
-  Full video setup with upload, polling, webhooks, and timestamped findings.
-</Card>
-
-## 5. Read the Results
 
 ```json Response
 {
-  "score": 35,
-  "decision": "BLOCK",
-  "checks": [
-    {
-      "agentId": "advertising-law",
-      "checkName": "unsubstantiated-claim",
-      "status": "block",
-      "severity": "critical",
-      "message": "'Guaranteed weight loss' violates FTC health claim rules",
-      "recommendation": "Remove unsubstantiated health claims"
+  "uploadUrl": "https://studio2.blob.core.windows.net/videos/...?sv=...&sig=...",
+  "blobPath": "videos/<tenantId>/<requestId>/source.mp4",
+  "requestId": "319b5d9e-a67f-45ee-9789-d7384fd73a3e",
+  "requiredTags": { "tenantId": "...", "requestId": "...", "kind": "video" },
+  "maxSizeBytes": 209715200,
+  "uploadInstructions": {
+    "method": "PUT",
+    "headers": {
+      "x-ms-blob-type": "BlockBlob",
+      "x-ms-tags": "tenantId=...&requestId=...&kind=video",
+      "Content-Type": "video/mp4"
     }
-  ],
-  "annotations": [
-    {
-      "type": "text-span",
-      "agentId": "advertising-law",
-      "severity": "critical",
-      "message": "'Guaranteed weight loss' violates FTC health claim rules",
-      "suggestion": "Remove unsubstantiated health claims",
-      "textLocation": {
-        "start": 8,
-        "end": 40,
-        "matchedText": "guaranteed weight loss solution"
-      }
-    }
-  ],
-  "cached": false,
-  "creditsCharged": 12,
-  "versionInfo": {
-    "engineVersion": "1.0.0",
-    "rulesVersion": "2026-04-17"
-  },
-  "costBreakdown": {
-    "totalCredits": 12,
-    "agents": [...]
   }
 }
 ```
 
-### Understanding the Response
+Save the `requestId` + `blobPath` — you'll need them in step 5.
 
-| Field | Meaning |
-|-------|---------|
-| `score` | 0-100 compliance score |
-| `decision` | `PUBLISH` (80-100), `HOLD` (60-79), `BLOCK` (0-59 or critical severity) |
-| `checks[]` | Detailed findings from each agent |
-| `annotations[]` | UI-embeddable issue locations (text spans, video timestamps, image regions) |
-| `versionInfo` | Engine and rules versions (for comparing results over time) |
-| `cached` | `true` if this is a cached result (0 credits charged) |
-| `creditsCharged` | Credits deducted for this request |
-| `costBreakdown` | Per-agent credit usage |
+## 4. Upload the video
+
+PUT the video bytes directly to the `uploadUrl` from step 3. Use exactly the headers in `uploadInstructions.headers`:
+
+```bash
+curl -X PUT "$UPLOAD_URL" \
+  -H "x-ms-blob-type: BlockBlob" \
+  -H "x-ms-tags: $X_MS_TAGS" \
+  -H "Content-Type: video/mp4" \
+  --data-binary @your-ad.mp4
+```
+
+The upload bypasses ZebraTruth servers — bytes go directly to managed blob storage. Max 200 MB.
+
+## 5. Submit for compliance analysis
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check-video \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestId": "319b5d9e-a67f-45ee-9789-d7384fd73a3e",
+    "blobPath": "videos/<tenantId>/<requestId>/source.mp4",
+    "jurisdictions": ["us", "eu"],
+    "platforms": ["tiktok", "youtube"],
+    "mode": "fast"
+  }'
+```
+
+```json Response (HTTP 202)
+{
+  "jobId": "319b5d9e-a67f-45ee-9789-d7384fd73a3e",
+  "status": "queued",
+  "estimatedCredits": 300
+}
+```
+
+You'll get back a `202 Accepted` immediately with `estimatedCredits` reserved. The pipeline runs server-side: probe → audio extract → whisper-1 transcription → frame sampling (max 20) → Google Cloud Vision (OCR + brand + safesearch) → Stage A→C compliance reasoning.
+
+## 6. Poll for the report
+
+```bash
+curl https://api.zebratruth.ai/v1/compliance/check-video/319b5d9e-a67f-45ee-9789-d7384fd73a3e \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+```
+
+```json Response (status: completed)
+{
+  "requestId": "319b5d9e-a67f-45ee-9789-d7384fd73a3e",
+  "status": "completed",
+  "reportStatus": "complete",
+  "billingStatus": "committed",
+  "durationMs": 28000,
+  "report": {
+    "schemaVersion": "video-report.v1",
+    "status": "complete",
+    "checks": [
+      {
+        "agentId": "advertising-law",
+        "checkName": "Unsubstantiated efficacy claim",
+        "status": "flag",
+        "severity": "medium",
+        "evidenceIds": ["audio_003"],
+        "timelineLocation": { "startMs": 4500, "endMs": 7200, "track": "audio" },
+        "message": "Claim 'guaranteed results' lacks substantiation — FTC §5 risk.",
+        "recommendation": "Add 'individual results may vary' overlay or remove claim."
+      },
+      {
+        "agentId": "rights-clearance-image",
+        "checkName": "Brand detected: Nike",
+        "status": "flag",
+        "severity": "medium",
+        "evidenceIds": ["frame_007", "frame_009"],
+        "timelineLocation": { "startMs": 12000, "endMs": 18000, "track": "video" }
+      }
+    ],
+    "analysisDiagnostics": [],
+    "preprocessing": {
+      "transcriptionStatus": "complete",
+      "frameAnalysisStatus": "complete",
+      "degraded": false,
+      "evidenceTruncated": false
+    }
+  }
+}
+```
+
+Poll every 2 seconds. Typical completion: 20-60 seconds for a 30-second video.
+
+## Status state machine
+
+```
+queued → processing → completed (reportStatus: complete / insufficient_evidence)
+                    ↓
+                    failed (reportStatus: analysis_failed)
+```
+
+When `status` is `completed` or `failed`, stop polling.
+
+## Webhook alternative (recommended for production)
+
+Configure a webhook URL once at the account level, then submit videos with no polling required:
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check-video \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -d '{
+    "requestId": "<uuid>",
+    "blobPath": "<from step 3>",
+    "jurisdictions": ["us"],
+    "platforms": ["tiktok"],
+    "mode": "fast",
+    "webhookUrl": "https://yourapp.com/zebratruth-callback"
+  }'
+```
+
+Each delivery is HMAC-signed with a stable signature across retries (5 attempts, exponential backoff). See [Async + Webhooks](/guides/async-webhook-execution) for HMAC verification + retry handling.
+
+---
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/authentication">
-    API key types, scopes, and security best practices
+  <Card title="Full video guide" icon="video" href="/guides/video-compliance-check">
+    Detailed examples, error codes, webhook HMAC verification.
   </Card>
-  <Card title="Annotations" icon="highlighter" href="/concepts/annotations">
-    How to map compliance results to your UI
+
+  <Card title="Cost & credits" icon="dollar-sign" href="/guides/cost-and-credits">
+    Per-second pricing math, tier multipliers, credit reservation lifecycle.
   </Card>
-  <Card title="Streaming" icon="signal-stream" href="/guides/streaming-integration">
-    Get progressive results as each agent completes
+
+  <Card title="LLM Skill installation" icon="robot" href="/llm-skill/installation">
+    Install the ZebraTruth skill so your LLM agent can run video compliance checks autonomously.
   </Card>
-  <Card title="Video Compliance" icon="video" href="/guides/video-compliance-check">
-    Upload video files and retrieve timestamped compliance findings
-  </Card>
-  <Card title="Full API Reference" icon="book" href="/api-reference">
-    All endpoints, schemas, and examples
+
+  <Card title="Other content types" icon="ellipsis" href="/concepts/other-content-types">
+    Image + text endpoints (sync).
   </Card>
 </CardGroup>

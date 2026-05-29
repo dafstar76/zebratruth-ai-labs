@@ -1,17 +1,21 @@
 ---
-title: Video Compliance Check
-description: Upload a video, run async compliance analysis, and retrieve timestamped findings
+title: Video Compliance Check — Full Guide
+description: 3-step async flow with curl, Node, Python. Error handling, webhook HMAC verification, billing semantics.
 ---
 
-# Video Compliance Check
+# Video Compliance Check — Full Guide
 
-ZebraTruth accepts video files through an async, server-side pipeline. Your app uploads the video directly to ZebraTruth-managed blob storage, submits the uploaded `blobPath` for analysis, then polls for the report or receives a signed webhook.
+ZebraTruth runs compliance analysis on video ads through a **server-side async pipeline**. Your client uploads the video to managed blob storage, submits a job, then either polls or receives a webhook when the report is ready.
+
+<Card title="Primary endpoint" icon="video" horizontal>
+  **POST `https://api.zebratruth.ai/v1/compliance/check-video`**
+</Card>
 
 <Note>
-  No client-side ffmpeg is required. ZebraTruth handles video probing, audio transcription, frame extraction, OCR, visual signals, and compliance analysis server-side.
+  **No client-side ffmpeg.** ZebraTruth handles video probing, audio transcription, frame extraction, OCR, visual signals, and Stage A→C compliance analysis server-side.
 </Note>
 
-## Supported Inputs
+## Supported inputs
 
 | Limit | Value |
 | --- | --- |
@@ -21,116 +25,175 @@ ZebraTruth accepts video files through an async, server-side pipeline. Your app 
 | Execution | Async only |
 | Client preprocessing | None required |
 
-## Flow
+## The 3-step flow
 
-1. Request an upload URL with `POST /v1/compliance/media/upload-url`.
-2. Upload the video bytes to the returned `uploadUrl`.
-3. Submit the uploaded video with `POST /v1/compliance/check-video`.
-4. Poll `GET /v1/compliance/check-video/{requestId}` until `status` is `completed` or `failed`.
+1. **`POST /v1/compliance/media/upload-url`** — get a 15-min signed Azure Blob upload URL
+2. **`PUT <uploadUrl>`** — upload your video bytes directly to managed storage
+3. **`POST /v1/compliance/check-video`** — submit the uploaded video for analysis (returns 202)
+4. **Poll** `GET /v1/compliance/check-video/{requestId}` OR receive an HMAC-signed webhook
 
-## 1. Create an Upload URL
+---
+
+## Step 1 — Request an upload URL
 
 ```bash
 curl -X POST https://api.zebratruth.ai/v1/compliance/media/upload-url \
   -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{
-    "contentType": "video/mp4"
-  }'
+  -d '{"contentType": "video/mp4"}'
 ```
 
 ```json Response
 {
-  "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
-  "blobPath": "videos/tenant_abc/82b68316-ed85-489c-991e-2ff0f2b95f29/source.mp4",
-  "uploadUrl": "https://...",
+  "uploadUrl": "https://studio2.blob.core.windows.net/videos/...?sv=...&sig=...",
+  "blobPath": "videos/<tenantId>/<requestId>/source.mp4",
+  "requestId": "319b5d9e-a67f-45ee-9789-d7384fd73a3e",
+  "expiresAt": "2026-05-29T18:30:00Z",
+  "maxSizeBytes": 209715200,
+  "requiredTags": {
+    "tenantId": "<your-tenant>",
+    "requestId": "319b5d9e-...",
+    "kind": "video"
+  },
   "uploadInstructions": {
     "method": "PUT",
     "headers": {
       "x-ms-blob-type": "BlockBlob",
-      "x-ms-tags": "tenantId=tenant_abc&requestId=82b68316-ed85-489c-991e-2ff0f2b95f29&kind=video"
+      "x-ms-tags": "tenantId=<your-tenant>&requestId=319b5d9e-...&kind=video",
+      "Content-Type": "video/mp4"
     }
   }
 }
 ```
 
-<Warning>
-  Pass `uploadInstructions.headers` exactly as returned when uploading the file. The headers carry ownership tags that bind the uploaded video to the tenant and request.
-</Warning>
+The `uploadUrl` is valid for 15 minutes. Save `requestId` + `blobPath` — you'll pass `blobPath` back in step 3 + use `requestId` to poll.
 
-## 2. Upload the Video
+## Step 2 — Upload the video
+
+PUT your video bytes directly to `uploadUrl`. **Use exactly the headers from `uploadInstructions.headers`** — `x-ms-tags` is required by Azure for the integrity check.
 
 ```bash
 curl -X PUT "$UPLOAD_URL" \
   -H "x-ms-blob-type: BlockBlob" \
-  -H "x-ms-tags: tenantId=tenant_abc&requestId=82b68316-ed85-489c-991e-2ff0f2b95f29&kind=video" \
-  --data-binary "@ad.mp4"
+  -H "x-ms-tags: tenantId=...&requestId=...&kind=video" \
+  -H "Content-Type: video/mp4" \
+  --data-binary @your-ad.mp4
 ```
 
-The upload URL is short-lived and write-only. ZebraTruth validates the final duration, codec, and size during the check submission step.
+Azure returns 201 Created on success. Bytes go directly to ZebraTruth-managed blob storage — they don't pass through ZebraTruth servers.
 
-## 3. Submit the Video Check
+## Step 3 — Submit for analysis
 
 ```bash
 curl -X POST https://api.zebratruth.ai/v1/compliance/check-video \
   -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
   -d '{
-    "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
-    "blobPath": "videos/tenant_abc/82b68316-ed85-489c-991e-2ff0f2b95f29/source.mp4",
+    "requestId": "319b5d9e-a67f-45ee-9789-d7384fd73a3e",
+    "blobPath": "videos/<tenantId>/319b5d9e-.../source.mp4",
     "jurisdictions": ["us", "eu"],
-    "platforms": ["youtube", "instagram"],
-    "mode": "fast"
+    "platforms": ["tiktok", "youtube"],
+    "mode": "fast",
+    "callbackId": "your-internal-id-optional",
+    "webhookUrl": "https://yourapp.com/zebratruth-callback"
   }'
 ```
 
-```json Response
+```json Response (HTTP 202)
 {
-  "jobId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
+  "jobId": "319b5d9e-a67f-45ee-9789-d7384fd73a3e",
   "status": "queued",
-  "estimatedCredits": 600
+  "estimatedCredits": 300
 }
 ```
 
-Video checks are priced by duration. V1 uses `ceil(durationSeconds) * 10` credits.
+The endpoint validates the upload (existence + content-length under 200 MB + duration in [3, 180] sec), reserves credits, and enqueues the job.
 
-## 4. Poll for the Report
+### Request body fields
+
+| Field | Required | Notes |
+|---|---|---|
+| `requestId` | yes | UUID. Same as the one returned from upload-url. Also serves as idempotency key. |
+| `blobPath` | yes | From upload-url response. |
+| `jurisdictions` | yes | At least 1. Values: `us`, `eu`, `uk`, `in`, `cn`, etc. |
+| `platforms` | yes | At least 1. Values: `tiktok`, `youtube`, `instagram`, `facebook`, `linkedin`. |
+| `mode` | yes | `"fast"` only (V1). |
+| `callbackId` | no | Opaque string echoed back in webhook payloads. |
+| `webhookUrl` | no | If set + tenant has a signing secret, ZebraTruth POSTs the report when terminal. |
+
+### Possible error responses
+
+| Status | Body code | Meaning |
+|---|---|---|
+| 400 | `blob_path_invalid` | Path doesn't match `videos/<tenantId>/<requestId>/...` |
+| 400 | `unsupported_mode` | Mode other than `fast` |
+| 400 | `video_too_short` | Probed duration < 3 sec |
+| 400 | `video_too_long` | Probed duration > 180 sec |
+| 400 | `video_too_large` | Size > 200 MB |
+| 402 | `insufficient_credits` | Tenant budget exhausted |
+| 409 | `idempotency_conflict` | Same `requestId` already used with different inputs (the response body includes `reason: "blobPath" | "feature" | "inputHash"`) |
+| 503 | `video_analysis_disabled` | Feature flag off (should not happen in prod) |
+
+## Step 4 — Poll for results
 
 ```bash
-curl https://api.zebratruth.ai/v1/compliance/check-video/82b68316-ed85-489c-991e-2ff0f2b95f29 \
+curl https://api.zebratruth.ai/v1/compliance/check-video/319b5d9e-a67f-45ee-9789-d7384fd73a3e \
   -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
 ```
 
-```json Response
+```json Response (in-flight)
 {
-  "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
+  "requestId": "319b5d9e-...",
+  "status": "processing",
+  "phase": "transcribeAudio",
+  "billingStatus": "reserved"
+}
+```
+
+```json Response (terminal)
+{
+  "requestId": "319b5d9e-...",
   "status": "completed",
-  "phase": "done",
   "reportStatus": "complete",
   "billingStatus": "committed",
+  "workerCompletedAt": "2026-05-29T18:20:00Z",
+  "completedAt": "2026-05-29T18:20:01Z",
+  "durationMs": 28000,
+  "reportBlobPath": "videos/<tenantId>/319b5d9e-.../report.json",
   "report": {
     "schemaVersion": "video-report.v1",
+    "preprocessorVersion": "video-preprocessor.v1",
+    "evidenceVersion": "evidence-timeline.v1",
+    "tenantId": "<your-tenant>",
+    "requestId": "319b5d9e-...",
+    "generatedAt": "2026-05-29T18:20:00Z",
     "status": "complete",
     "checks": [
       {
         "agentId": "advertising-law",
-        "checkName": "Unsubstantiated health claim",
+        "checkName": "Unsubstantiated efficacy claim",
         "status": "flag",
-        "severity": "high",
-        "message": "The spoken claim appears to make a health efficacy claim without substantiation.",
-        "recommendation": "Add substantiation or remove the claim.",
+        "severity": "medium",
         "evidenceIds": ["audio_003"],
-        "timelineLocation": {
-          "startMs": 12400,
-          "endMs": 15800,
-          "track": "audio"
-        }
+        "timelineLocation": { "startMs": 4500, "endMs": 7200, "track": "audio" },
+        "message": "Claim 'guaranteed results in 30 days' lacks substantiation — FTC §5 risk.",
+        "recommendation": "Add 'individual results may vary' overlay or remove claim.",
+        "citation": "FTC Act §5",
+        "primaryCategory": "unsubstantiated-health-claim"
+      },
+      {
+        "agentId": "rights-clearance-image",
+        "checkName": "Brand detected: Nike",
+        "status": "flag",
+        "severity": "medium",
+        "evidenceIds": ["frame_007", "frame_009"],
+        "timelineLocation": { "startMs": 12000, "endMs": 18000, "track": "video" }
       }
     ],
+    "analysisDiagnostics": [],
     "preprocessing": {
       "transcriptionStatus": "complete",
-      "frameAnalysisStatus": "ok",
+      "frameAnalysisStatus": "complete",
       "degraded": false,
       "evidenceTruncated": false
     }
@@ -138,27 +201,168 @@ curl https://api.zebratruth.ai/v1/compliance/check-video/82b68316-ed85-489c-991e
 }
 ```
 
-## Evidence Fields
+### Status state machine
 
-Video findings can include:
+```
+queued → processing → completed (reportStatus: complete | insufficient_evidence)
+                    ↓
+                    failed (reportStatus: analysis_failed)
+```
 
-| Field | Meaning |
-| --- | --- |
-| `evidenceIds[]` | Stable references such as `audio_003`, `frame_007`, `ocr_012`, or `signal_011` |
-| `timelineLocation.startMs` | Millisecond timestamp where the issue begins |
-| `timelineLocation.endMs` | Millisecond timestamp where the issue ends |
-| `timelineLocation.track` | `audio`, `video`, or `mixed` |
+Poll every **2 seconds**. Typical completion: 20-60 seconds for a 30-second video. Hard ceiling: 3 minutes.
 
-Use `timelineLocation.startMs / 1000` to seek an HTML5 video element to the relevant moment.
+### Terminal report statuses
 
-## Webhooks
+| `reportStatus` | Meaning | Billing |
+|---|---|---|
+| `complete` | Real findings produced | Charged |
+| `insufficient_evidence` | Silent video / no OCR / no signals — pipeline ran but had nothing to flag | Released (no charge) |
+| `analysis_failed` | Engine error — failure recorded for audit | Released (no charge) |
 
-For production integrations, pass `webhookUrl` to `POST /v1/compliance/check-video`. ZebraTruth signs terminal callbacks with your tenant-level video webhook secret.
+## Webhooks (recommended for production)
+
+Instead of polling, configure a webhook URL once at the account level and submit videos with `webhookUrl` set.
+
+### Get / create your tenant webhook secret
 
 ```bash
 curl https://api.zebratruth.ai/v1/compliance/webhooks/video/secret \
   -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
 ```
 
-See [Async Webhook Execution](/guides/async-webhook-execution) for general webhook handling patterns.
+```json Response
+{
+  "secret": "whsec_a1b2c3d4...",
+  "createdAt": "2026-05-29T18:00:00Z"
+}
+```
 
+Save the secret securely — ZebraTruth only returns it once on creation.
+
+### Verify webhook signatures
+
+Each delivery is HMAC-SHA256-signed. Signature is **stable across retries** (computed once at enqueue + cached on the row).
+
+Headers:
+- `x-zt-timestamp: <unix-seconds>`
+- `x-zt-signature: <hex-signature>`
+
+Canonical signing format:
+```
+HMAC-SHA256(secret, "POST" + "\n" + path + "\n" + timestamp + "\n" + sha256(rawBody))
+```
+
+Node.js example:
+
+```js
+import crypto from "node:crypto";
+
+function verifyZebraTruthWebhook(rawBody, headers, secret) {
+  const timestamp = headers["x-zt-timestamp"];
+  const signature = headers["x-zt-signature"];
+
+  // Reject if timestamp older than 5 min (replay protection)
+  if (Math.abs(Date.now() / 1000 - parseInt(timestamp)) > 300) {
+    return false;
+  }
+
+  const bodyHash = crypto.createHash("sha256").update(rawBody).digest("hex");
+  const canonical = `POST\n/your-webhook-path\n${timestamp}\n${bodyHash}`;
+  const expected = crypto.createHmac("sha256", secret).update(canonical).digest("hex");
+
+  return crypto.timingSafeEqual(
+    Buffer.from(expected),
+    Buffer.from(signature)
+  );
+}
+```
+
+### Retry semantics
+
+| Attempt | Delay after previous |
+|---|---|
+| 1 | (immediate) |
+| 2 | +1 minute |
+| 3 | +5 minutes |
+| 4 | +15 minutes |
+| 5 | +1 hour |
+
+After 5 failures, the delivery is marked `failed` and dropped. **Webhook failures do NOT mutate the compliance job row** — the job stays `completed_committed`. The webhook delivery has its own retry state in `videoWebhookDeliveries`.
+
+### Rotate the secret
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/webhooks/video/secret/rotate \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+```
+
+In-flight deliveries keep their original signature (sig is computed at enqueue). New jobs use the rotated secret immediately.
+
+## Idempotency
+
+Same `(requestId, blobPath, jurisdictions, platforms, mode)` → 202 with `idempotent: true`, no extra charge.
+
+Same `requestId` with different `blobPath` / `jurisdictions` / `platforms` / `mode` → 409 `idempotency_conflict`:
+
+```json
+{
+  "error": true,
+  "statusCode": 409,
+  "data": {
+    "code": "idempotency_conflict",
+    "reason": "blobPath",  // or "feature" or "inputHash"
+    "existing": { "blobPath": "...", "inputHash": "..." },
+    "incoming": { "blobPath": "...", "inputHash": "..." }
+  }
+}
+```
+
+Precedence: `blobPath > feature > inputHash` (deterministic order for stable error messages).
+
+## Cost
+
+Per-second pricing. 10 credits/second. A 60-second video costs ~600 credits (≈$5.41 at $1 = 111 credits).
+
+| Duration | Credits | USD |
+|---|---|---|
+| 3 sec (minimum) | 30 | ≈$0.27 |
+| 10 sec | 100 | ≈$0.90 |
+| 30 sec | 300 | ≈$2.70 |
+| 60 sec | 600 | ≈$5.41 |
+| 180 sec (maximum) | 1800 | ≈$16.22 |
+
+Credits are reserved at submit + committed on `reportStatus: complete`. `insufficient_evidence` and `analysis_failed` release the reservation (no charge).
+
+See [Cost & Credits](/guides/cost-and-credits) for tier multipliers + billing lifecycle.
+
+## Common errors
+
+| HTTP | code | Cause | Fix |
+|---|---|---|---|
+| 400 | `blob_path_invalid` | Path doesn't match the tenant's prefix | Use the `blobPath` from upload-url verbatim |
+| 400 | `video_too_short` | < 3 seconds | Cut the source long enough |
+| 400 | `video_too_long` | > 180 seconds | Split into segments |
+| 400 | `video_too_large` | > 200 MB | Reduce bitrate or resolution before upload |
+| 402 | `insufficient_credits` | Budget exhausted | Top up or wait for next billing period |
+| 409 | `idempotency_conflict` | Same `requestId`, different inputs | Use a fresh UUID per submission |
+| 503 | `video_analysis_disabled` | (Should not happen in prod) | Contact support |
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Cost & credits" icon="dollar-sign" href="/guides/cost-and-credits">
+    Per-second pricing math, tier multipliers, credit lifecycle.
+  </Card>
+
+  <Card title="Async + Webhooks" icon="bell" href="/guides/async-webhook-execution">
+    HMAC verification deep dive, retry semantics.
+  </Card>
+
+  <Card title="Interpreting reports" icon="chart-simple" href="/guides/interpreting-reports">
+    How to read scores + decisions + agent breakdowns.
+  </Card>
+
+  <Card title="LLM Skill" icon="robot" href="/llm-skill/installation">
+    Install the skill so your LLM agent runs video checks autonomously.
+  </Card>
+</CardGroup>

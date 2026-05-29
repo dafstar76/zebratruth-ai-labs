@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "ZebraTruth API Documentation",
+  "name": "ZebraTruth — Compliance for Video",
   "logo": {
     "dark": "/logo/dark.svg",
     "light": "/logo/light.svg"
@@ -36,6 +36,16 @@
             ]
           },
           {
+            "group": "Video Compliance",
+            "pages": [
+              "video",
+              "guides/video-compliance-check",
+              "guides/async-webhook-execution",
+              "guides/interpreting-reports",
+              "guides/cost-and-credits"
+            ]
+          },
+          {
             "group": "Concepts",
             "pages": [
               "concepts/agents",
@@ -52,6 +62,14 @@
               "llm-skill/overview",
               "llm-skill/installation"
             ]
+          },
+          {
+            "group": "Other Content Types",
+            "pages": [
+              "concepts/other-content-types",
+              "guides/content-compliance-check",
+              "guides/image-rights-clearance"
+            ]
           }
         ]
       },
@@ -59,11 +77,14 @@
         "tab": "Guides",
         "groups": [
           {
-            "group": "Guides",
+            "group": "Video",
             "pages": [
-              "guides/content-compliance-check",
-              "guides/video-compliance-check",
-              "guides/image-rights-clearance",
+              "guides/video-compliance-check"
+            ]
+          },
+          {
+            "group": "Other",
+            "pages": [
               "guides/restricted-categories",
               "guides/streaming-integration",
               "guides/async-webhook-execution",
@@ -71,7 +92,9 @@
               "guides/interpreting-reports",
               "guides/embedding-annotations",
               "guides/cost-and-credits",
-              "guides/debugging"
+              "guides/debugging",
+              "guides/content-compliance-check",
+              "guides/image-rights-clearance"
             ]
           }
         ]
