@@ -62,6 +62,7 @@
             "group": "Guides",
             "pages": [
               "guides/content-compliance-check",
+              "guides/video-compliance-check",
               "guides/image-rights-clearance",
               "guides/restricted-categories",
               "guides/streaming-integration",

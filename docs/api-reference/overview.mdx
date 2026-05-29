@@ -21,6 +21,9 @@ All mutating endpoints (POST, DELETE) require an `Idempotency-Key` header.
   <Card title="Compliance" icon="shield-check">
     - `POST /compliance/check` — Run compliance check
     - `POST /compliance/check-image` — Image rights clearance
+    - `POST /compliance/media/upload-url` — Create video upload URL
+    - `POST /compliance/check-video` — Submit video compliance check
+    - `GET /compliance/check-video/{requestId}` — Poll video status and report
   </Card>
   <Card title="Agents" icon="robot">
     - `GET /agents` — List available agents

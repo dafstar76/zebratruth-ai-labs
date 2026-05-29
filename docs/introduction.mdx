@@ -39,10 +39,19 @@ Instant compliance checks are proactive and take place within your creation, ups
 
 ## How It Works
 
-1. **Send content** — POST your ad script, images, or video metadata to the API
+1. **Send content** — POST your ad script, images, or upload video files through the API
 2. **Agents analyze** — 20\+ specialized AI agents check against laws, platforms, and rights
 3. **Get results** — Structured report with score, checks, and UI-embeddable annotations
 4. **Fix and re-check** — Iterate until the decision is PUBLISH
+
+## Native Video Checks
+
+ZebraTruth supports async compliance checks for uploaded video files through `POST /v1/compliance/check-video`.
+Your client does not need ffmpeg: upload the video with `POST /v1/compliance/media/upload-url`, submit the returned `blobPath`, and retrieve timestamped findings with `GET /v1/compliance/check-video/{requestId}`.
+
+<Card title="Run a Video Compliance Check" icon="video" href="/guides/video-compliance-check">
+  Upload, submit, poll, and receive webhook callbacks for video compliance analysis.
+</Card>
 
 ## Three Ways to Integrate
 

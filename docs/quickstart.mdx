@@ -56,7 +56,7 @@ update these later from the dashboard. See the
 [Tenant Onboarding and Scoping guide](/guides/tenant-onboarding-and-scoping)
 for the full model.
 
-## 4. Run a Compliance Check
+## 4. Run a Text Compliance Check
 
 ```bash
 curl -X POST https://api.zebratruth.ai/v1/compliance/check \
@@ -91,6 +91,44 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check \
   Repeat `jurisdictions`, `platforms`, and `image` for each value (up to 2 images,
   4.5 MB total body). Multipart is sync-only — no streaming or webhooks.
 </Note>
+
+## Run a Video Compliance Check
+
+ZebraTruth also accepts native video files. Video checks are async: upload the video, submit the returned `blobPath`, then poll for a timestamped report.
+
+<Note>
+  No client-side ffmpeg is required. ZebraTruth handles probing, audio transcription, frame extraction, OCR, visual signals, and compliance analysis server-side.
+</Note>
+
+```bash
+# 1. Create a video upload URL
+curl -X POST https://api.zebratruth.ai/v1/compliance/media/upload-url \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"contentType":"video/mp4"}'
+
+# 2. PUT your video bytes to the returned uploadUrl using the returned headers
+# 3. Submit the uploaded blob for analysis
+curl -X POST https://api.zebratruth.ai/v1/compliance/check-video \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
+    "blobPath": "videos/tenant_abc/82b68316-ed85-489c-991e-2ff0f2b95f29/source.mp4",
+    "jurisdictions": ["us"],
+    "platforms": ["youtube"],
+    "mode": "fast"
+  }'
+
+# 4. Poll until status is completed or failed
+curl https://api.zebratruth.ai/v1/compliance/check-video/82b68316-ed85-489c-991e-2ff0f2b95f29 \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+```
+
+<Card title="Video Compliance Guide" icon="video" href="/guides/video-compliance-check">
+  Full video setup with upload, polling, webhooks, and timestamped findings.
+</Card>
 
 ## 5. Read the Results
 
@@ -159,6 +197,9 @@ curl -X POST https://api.zebratruth.ai/v1/compliance/check \
   </Card>
   <Card title="Streaming" icon="signal-stream" href="/guides/streaming-integration">
     Get progressive results as each agent completes
+  </Card>
+  <Card title="Video Compliance" icon="video" href="/guides/video-compliance-check">
+    Upload video files and retrieve timestamped compliance findings
   </Card>
   <Card title="Full API Reference" icon="book" href="/api-reference">
     All endpoints, schemas, and examples

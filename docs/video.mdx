@@ -1,0 +1,15 @@
+---
+title: Video Compliance
+description: Run async compliance checks on uploaded video files
+---
+
+# Video Compliance
+
+ZebraTruth supports native video compliance checks through `POST /v1/compliance/check-video`.
+
+No client-side ffmpeg is required. Upload the video with `POST /v1/compliance/media/upload-url`, submit the returned `blobPath`, then poll `GET /v1/compliance/check-video/{requestId}` for timestamped findings.
+
+<Card title="Video Compliance Check" icon="video" href="/guides/video-compliance-check">
+  Follow the upload, submit, poll, and webhook flow for video files.
+</Card>
+
