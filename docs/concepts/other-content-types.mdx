@@ -1,0 +1,72 @@
+---
+title: Other Content Types
+description: Image and text compliance check endpoints (sync)
+---
+
+# Other Content Types
+
+ZebraTruth's primary product is [video compliance](/quickstart). Image + text endpoints are available for partial / text-only content reviews.
+
+<Note>
+  Most customers run **video** compliance checks. Image + text are listed here for completeness — see [Quickstart](/quickstart) for the video flow.
+</Note>
+
+## Image Compliance
+
+**Endpoint:** `POST https://api.zebratruth.ai/v1/compliance/check-image`
+
+Single-image compliance check. Sync (returns the full report in the same request). Multipart form upload — no separate upload-URL step.
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check-image \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -F "image=@your-ad.jpg" \
+  -F "jurisdictions=us,eu" \
+  -F "platforms=instagram,facebook"
+```
+
+Returns the same `report` envelope shape as video, with one key difference: image checks don't carry `timelineLocation` (no time dimension) — they carry `bbox` for spatial regions on the image.
+
+Detects: brand logos, watermarks, restricted categories (alcohol/tobacco/firearms/etc.), content safety (adult/violence/racy), and C2PA metadata.
+
+**Use video instead if:** your content is a video. Submitting individual frames to the image endpoint costs more, loses temporal context (no transcript), and misses claims that only appear when frames are read together.
+
+## Text Compliance
+
+**Endpoint:** `POST https://api.zebratruth.ai/v1/compliance/check`
+
+Sync ad-copy / script / caption compliance check. JSON body, ≤500 words.
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Try our miracle weight-loss pill — guaranteed results in 30 days!",
+    "jurisdictions": ["us"],
+    "platforms": ["tiktok"],
+    "mode": "fast"
+  }'
+```
+
+Detects: unsubstantiated claims, missing disclaimers, restricted-category language, regulatory compliance (FTC §5, EU UCPD, UK ASA), platform AI-disclosure language.
+
+**Use video instead if:** your content has spoken claims or on-screen text — the video pipeline auto-extracts these via transcription + per-frame OCR and analyzes them in temporal context.
+
+## When to use which
+
+| You have | Use |
+|---|---|
+| A video ad (mp4/webm/quicktime) | [`/v1/compliance/check-video`](/quickstart) ← **primary product** |
+| A single image (jpg/png/gif/webp) | `/v1/compliance/check-image` |
+| Ad copy / script / caption only | `/v1/compliance/check` |
+
+The video endpoint dominates because it captures all signals in one call: spoken + on-screen + visual.
+
+## API reference
+
+Full request + response schemas for all three endpoints:
+
+<Card title="OpenAPI Reference" icon="code" href="/api-reference/overview">
+  Endpoint specs, request bodies, response envelopes, error codes.
+</Card>

@@ -22,10 +22,18 @@ security:
   - bearerAuth: []
 
 tags:
+  - name: Video Compliance
+    description: |
+      **Primary endpoint.** Async compliance analysis for video ads. 3-step flow:
+      get an upload URL, upload the video bytes, submit for analysis. Poll or
+      receive an HMAC-signed webhook with the report. Returns timestamped
+      findings citing stable evidence IDs (`audio_NNN`, `frame_NNN`, `ocr_NNN`,
+      `signal_NNN`). Per-second pricing. 3-180 second videos. mp4 / webm /
+      quicktime. Built for ad agencies and creators.
   - name: Authentication
     description: Validate API keys and check account status
   - name: Compliance
-    description: Run compliance checks on content
+    description: Run compliance checks on text + image content (sync). For video, use the Video Compliance endpoints above.
   - name: Agents
     description: Discover and invoke individual compliance agents
   - name: Jobs
@@ -34,11 +42,6 @@ tags:
     description: Retrieve and replay compliance reports
   - name: Observability
     description: Request logs and webhook delivery status
-  - name: Video Compliance
-    description: |
-      Async compliance analysis for video content. Upload a video, submit a check,
-      poll for the report. Includes tenant-level webhook signing-secret management
-      for verifying delivery callbacks.
 
 paths:
   /whoami:

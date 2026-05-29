@@ -1,0 +1,80 @@
+# ZebraTruth — Compliance Checks for Video
+
+> ZebraTruth is a compliance-intelligence API for AI-generated video ads. Upload a video, get back timestamped findings against FTC, EU UCPD, UK ASA, platform-specific rules (TikTok, YouTube, Meta), brand detection, and rights clearance. Built for ad agencies and creators running automated pre-publish gates.
+
+## Primary endpoint — Video Compliance
+
+```
+POST https://api.zebratruth.ai/v1/compliance/check-video
+```
+
+The video flow is **async** (3 steps + poll):
+
+1. `POST /v1/compliance/media/upload-url` — get a signed Azure Blob upload URL
+2. `PUT <uploadUrl>` — upload video bytes (max 200 MB)
+3. `POST /v1/compliance/check-video` — submit `{requestId, blobPath, jurisdictions, platforms, mode}`, returns 202
+4. `GET /v1/compliance/check-video/{requestId}` — poll until `status: completed`
+
+Reports cite stable evidence IDs: `audio_NNN` (transcript segments), `frame_NNN` (sampled frames), `ocr_NNN` (on-screen text), `signal_NNN` (visual signals — brands, watermarks, restricted categories).
+
+Per-second pricing. 3-180 second videos. mp4 / webm / quicktime.
+
+## Video endpoint family
+
+- `POST /v1/compliance/media/upload-url` — request a SAS upload URL (step 1)
+- `POST /v1/compliance/check-video` — submit for analysis (step 3)
+- `GET /v1/compliance/check-video/{requestId}` — poll for status + report (step 4)
+- `GET /v1/compliance/webhooks/video/secret` — get/create the tenant webhook signing secret
+- `POST /v1/compliance/webhooks/video/secret/rotate` — rotate the webhook secret
+
+## Authentication
+
+Bearer token. Get a key at [developers.zebratruth.ai](https://developers.zebratruth.ai):
+
+```
+Authorization: Bearer zt_live_<your_key>
+```
+
+Test keys (`zt_test_*`) return deterministic sandbox responses with no credit cost.
+
+## Documentation
+
+- Quickstart (video): https://docs.zebratruth.ai/quickstart
+- Full guide: https://docs.zebratruth.ai/guides/video-compliance-check
+- Concept page (architecture + schema): https://docs.zebratruth.ai/video
+- API reference (OpenAPI): https://docs.zebratruth.ai/api-reference/overview
+
+## LLM Skill (for autonomous agents)
+
+ZebraTruth ships a Claude Code / OpenClaw plugin so autonomous agents can run video compliance checks without per-call docs lookup:
+
+```
+/plugin marketplace add dafstar76/zebratruth-ai-labs
+/plugin install zebratruth-compliance@zebratruth-ai-labs
+```
+
+Workflow doc the skill loads on demand:
+https://raw.githubusercontent.com/dafstar76/zebratruth-ai-labs/master/skills/zebratruth-compliance/workflows/video-compliance-check.md
+
+## Other content types
+
+ZebraTruth also supports compliance on single images (`POST /v1/compliance/check-image`, sync, multipart) and text/ad copy (`POST /v1/compliance/check`, sync, JSON). Most customers — ad agencies and creators — use the video endpoint. See https://docs.zebratruth.ai/concepts/other-content-types for image + text references.
+
+## Status state machine (video)
+
+```
+queued → processing → completed (reportStatus: complete | insufficient_evidence)
+                    ↓
+                    failed (reportStatus: analysis_failed)
+```
+
+Report fields:
+- `report.checks[]` — VideoComplianceCheck array with `evidenceIds` + `timelineLocation`
+- `report.analysisDiagnostics[]` — pipeline/processing issues (not compliance findings)
+- `report.preprocessing` — transcriptionStatus, frameAnalysisStatus, degraded, evidenceTruncated
+
+## Repository
+
+- Docs source: https://github.com/dafstar76/zebratruth-ai-labs
+- Dashboard / API key issuance: https://developers.zebratruth.ai
+- Status page: https://status.zebratruth.ai
