@@ -58,6 +58,7 @@
       "group": "Guides",
       "pages": [
         "guides/content-compliance-check",
+        "guides/video-compliance-check",
         "guides/image-rights-clearance",
         "guides/streaming-integration",
         "guides/async-webhook-execution",

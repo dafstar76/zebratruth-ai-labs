@@ -18,10 +18,15 @@ ZebraTruth can be integrated into **any LLM agent** by injecting a single markdo
 
 - Validate API keys via `GET /whoami`
 - Run compliance checks (sync, stream, or async)
+- Run native video checks with `POST /v1/compliance/media/upload-url`, `POST /v1/compliance/check-video`, and `GET /v1/compliance/check-video/{requestId}`
 - Invoke individual agents for targeted checks
 - Interpret scores, decisions, and annotations
 - Check credit balance before expensive operations
 - Handle errors (401, 402, 429) with appropriate user guidance
+
+<Card title="Video Compliance Workflow" icon="video" href="/guides/video-compliance-check">
+  Agents should use this guide when a user asks to check a video file. No client-side ffmpeg is required.
+</Card>
 
 ## Why This Approach
 

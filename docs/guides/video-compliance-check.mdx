@@ -1,0 +1,164 @@
+---
+title: Video Compliance Check
+description: Upload a video, run async compliance analysis, and retrieve timestamped findings
+---
+
+# Video Compliance Check
+
+ZebraTruth accepts video files through an async, server-side pipeline. Your app uploads the video directly to ZebraTruth-managed blob storage, submits the uploaded `blobPath` for analysis, then polls for the report or receives a signed webhook.
+
+<Note>
+  No client-side ffmpeg is required. ZebraTruth handles video probing, audio transcription, frame extraction, OCR, visual signals, and compliance analysis server-side.
+</Note>
+
+## Supported Inputs
+
+| Limit | Value |
+| --- | --- |
+| Content types | `video/mp4`, `video/webm`, `video/quicktime` |
+| Duration | 3 to 180 seconds |
+| File size | Up to 200 MB |
+| Execution | Async only |
+| Client preprocessing | None required |
+
+## Flow
+
+1. Request an upload URL with `POST /v1/compliance/media/upload-url`.
+2. Upload the video bytes to the returned `uploadUrl`.
+3. Submit the uploaded video with `POST /v1/compliance/check-video`.
+4. Poll `GET /v1/compliance/check-video/{requestId}` until `status` is `completed` or `failed`.
+
+## 1. Create an Upload URL
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/media/upload-url \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contentType": "video/mp4"
+  }'
+```
+
+```json Response
+{
+  "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
+  "blobPath": "videos/tenant_abc/82b68316-ed85-489c-991e-2ff0f2b95f29/source.mp4",
+  "uploadUrl": "https://...",
+  "uploadInstructions": {
+    "method": "PUT",
+    "headers": {
+      "x-ms-blob-type": "BlockBlob",
+      "x-ms-tags": "tenantId=tenant_abc&requestId=82b68316-ed85-489c-991e-2ff0f2b95f29&kind=video"
+    }
+  }
+}
+```
+
+<Warning>
+  Pass `uploadInstructions.headers` exactly as returned when uploading the file. The headers carry ownership tags that bind the uploaded video to the tenant and request.
+</Warning>
+
+## 2. Upload the Video
+
+```bash
+curl -X PUT "$UPLOAD_URL" \
+  -H "x-ms-blob-type: BlockBlob" \
+  -H "x-ms-tags: tenantId=tenant_abc&requestId=82b68316-ed85-489c-991e-2ff0f2b95f29&kind=video" \
+  --data-binary "@ad.mp4"
+```
+
+The upload URL is short-lived and write-only. ZebraTruth validates the final duration, codec, and size during the check submission step.
+
+## 3. Submit the Video Check
+
+```bash
+curl -X POST https://api.zebratruth.ai/v1/compliance/check-video \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
+    "blobPath": "videos/tenant_abc/82b68316-ed85-489c-991e-2ff0f2b95f29/source.mp4",
+    "jurisdictions": ["us", "eu"],
+    "platforms": ["youtube", "instagram"],
+    "mode": "fast"
+  }'
+```
+
+```json Response
+{
+  "jobId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
+  "status": "queued",
+  "estimatedCredits": 600
+}
+```
+
+Video checks are priced by duration. V1 uses `ceil(durationSeconds) * 10` credits.
+
+## 4. Poll for the Report
+
+```bash
+curl https://api.zebratruth.ai/v1/compliance/check-video/82b68316-ed85-489c-991e-2ff0f2b95f29 \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+```
+
+```json Response
+{
+  "requestId": "82b68316-ed85-489c-991e-2ff0f2b95f29",
+  "status": "completed",
+  "phase": "done",
+  "reportStatus": "complete",
+  "billingStatus": "committed",
+  "report": {
+    "schemaVersion": "video-report.v1",
+    "status": "complete",
+    "checks": [
+      {
+        "agentId": "advertising-law",
+        "checkName": "Unsubstantiated health claim",
+        "status": "flag",
+        "severity": "high",
+        "message": "The spoken claim appears to make a health efficacy claim without substantiation.",
+        "recommendation": "Add substantiation or remove the claim.",
+        "evidenceIds": ["audio_003"],
+        "timelineLocation": {
+          "startMs": 12400,
+          "endMs": 15800,
+          "track": "audio"
+        }
+      }
+    ],
+    "preprocessing": {
+      "transcriptionStatus": "complete",
+      "frameAnalysisStatus": "ok",
+      "degraded": false,
+      "evidenceTruncated": false
+    }
+  }
+}
+```
+
+## Evidence Fields
+
+Video findings can include:
+
+| Field | Meaning |
+| --- | --- |
+| `evidenceIds[]` | Stable references such as `audio_003`, `frame_007`, `ocr_012`, or `signal_011` |
+| `timelineLocation.startMs` | Millisecond timestamp where the issue begins |
+| `timelineLocation.endMs` | Millisecond timestamp where the issue ends |
+| `timelineLocation.track` | `audio`, `video`, or `mixed` |
+
+Use `timelineLocation.startMs / 1000` to seek an HTML5 video element to the relevant moment.
+
+## Webhooks
+
+For production integrations, pass `webhookUrl` to `POST /v1/compliance/check-video`. ZebraTruth signs terminal callbacks with your tenant-level video webhook secret.
+
+```bash
+curl https://api.zebratruth.ai/v1/compliance/webhooks/video/secret \
+  -H "Authorization: Bearer $ZEBRATRUTH_API_KEY"
+```
+
+See [Async Webhook Execution](/guides/async-webhook-execution) for general webhook handling patterns.
+
