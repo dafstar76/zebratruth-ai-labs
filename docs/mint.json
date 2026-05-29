@@ -78,7 +78,7 @@
     }
   ],
   "openapi": [
-    "../openapi/zebratruth-v1.yaml"
+    "openapi/zebratruth-v1.yaml"
   ],
   "api": {
     "baseUrl": "https://api.zebratruth.ai/v1",
